@@ -8,10 +8,14 @@
 !build.zig
 !build.zig.zon
 
+!/common/
+!/common/**/
+!common/**/*.zig
+
 !/logos/
+!/logos/**/
 !/logos/**/*.zig
 
 !/kyber/
+!/kyber/**/
 !/kyber/**/*.zig
-
-!/kyber/.gitkeep
