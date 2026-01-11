@@ -1,0 +1,17 @@
+*
+
+!.gitignore
+!.justfile
+
+!README.md
+
+!build.zig
+!build.zig.zon
+
+!/logos/
+!/logos/**/*.zig
+
+!/kyber/
+!/kyber/**/*.zig
+
+!/kyber/.gitkeep

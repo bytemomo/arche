@@ -1,0 +1,14 @@
+.{
+    .name = .arche,
+    .version = "0.0.0",
+    .fingerprint = 0x792bc0f67e1dc3c6,
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "logos",
+        "kyber",
+    },
+}
