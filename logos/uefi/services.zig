@@ -48,6 +48,14 @@ pub const Services = struct {
         };
     }
 
+    pub fn allocPagesAt(self: Self, phys_addr: u64, count: usize) ![]align(4096) uefi.Page {
+        const addr: [*]align(4096) uefi.Page = @ptrFromInt(phys_addr);
+        return self.bs.allocatePages(.{ .address = addr }, .loader_data, count) catch |err| {
+            log.err("Failed to allocate {} pages at 0x{x}", .{ count, phys_addr });
+            return err;
+        };
+    }
+
     pub fn freePages(self: Self, pages: []align(4096) uefi.Page) void {
         self.bs.freePages(pages.ptr, pages.len) catch |err| {
             log.warn("Failed to free pages: {}", .{err});
@@ -87,9 +95,6 @@ pub const Services = struct {
     }
 };
 
-pub fn getImageHandle() !uefi.Handle {
-    return uefi.system_table.handle orelse {
-        log.err("Image handle not available", .{});
-        return error.ImageHandleUnavailable;
-    };
+pub fn getImageHandle() uefi.Handle {
+    return uefi.handle;
 }

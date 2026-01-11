@@ -28,7 +28,11 @@ pub fn build(b: *std.Build) void {
         "-cpu",
         "host",
         "-s",
-  };
+        // This adds to qemu a device that listen on I/O port 0xf4 and
+        // when write a byte to that port qemu exits.
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    };
     const qemu_cmd = b.addSystemCommand(&qemu_args);
     qemu_cmd.step.dependOn(b.getInstallStep());
 
@@ -57,14 +61,30 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     options.addOption(std.log.Level, "log_level", log_level);
 }
 
-fn createArchModule(b: *std.Build, comptime arch: std.Target.Cpu.Arch) *std.Build.Module {
+fn createTypesModule(b: *std.Build) *std.Build.Module {
+    return b.createModule(.{
+        .root_source_file = b.path("common/types.zig"),
+    });
+}
+
+fn createArchModule(b: *std.Build, comptime arch: std.Target.Cpu.Arch, types_module: *std.Build.Module) *std.Build.Module {
     const arch_path = switch (arch) {
         .x86_64 => "common/arch/x86_64.zig",
         else => @compileError("Unsupported architecture"),
     };
-    return b.createModule(.{
+    const mod = b.createModule(.{
         .root_source_file = b.path(arch_path),
     });
+    mod.addImport("types", types_module);
+    return mod;
+}
+
+fn createBootInfoModule(b: *std.Build, types_module: *std.Build.Module) *std.Build.Module {
+    const mod = b.createModule(.{
+        .root_source_file = b.path("common/boot_info.zig"),
+    });
+    mod.addImport("types", types_module);
+    return mod;
 }
 
 fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
@@ -78,14 +98,18 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
                 .ofmt = .elf,
             }),
             .optimize = optimize,
-            .code_model = .kernel,
+            .code_model = .large,
+            .pic = true,
         }),
         .linkage = .static,
         .use_llvm = true,
     });
-    kyber.entry = .{ .symbol_name = "_entry" };
+    kyber.setLinkerScript(b.path("kyber/linker.ld"));
+    const kyber_types = createTypesModule(b);
     kyber.root_module.addOptions("option", options);
-    kyber.root_module.addImport("arch", createArchModule(b, cpu_arch));
+    kyber.root_module.addImport("types", kyber_types);
+    kyber.root_module.addImport("arch", createArchModule(b, cpu_arch, kyber_types));
+    kyber.root_module.addImport("boot_info", createBootInfoModule(b, kyber_types));
     b.installArtifact(kyber);
 
     const install_kyber = b.addInstallFile(
@@ -114,8 +138,11 @@ fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
         .use_llvm = true,
     });
     logos.subsystem = .EfiApplication;
+    const logos_types = createTypesModule(b);
     logos.root_module.addOptions("option", options);
-    logos.root_module.addImport("arch", createArchModule(b, cpu_arch));
+    logos.root_module.addImport("types", logos_types);
+    logos.root_module.addImport("arch", createArchModule(b, cpu_arch, logos_types));
+    logos.root_module.addImport("boot_info", createBootInfoModule(b, logos_types));
     b.installArtifact(logos);
 
     const install_logos = b.addInstallFile(

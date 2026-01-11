@@ -46,6 +46,11 @@
 //!   PD:       512 × 2MB   = 1GB
 //!   PT:       512 × 4KB   = 2MB
 
+const common_types = @import("types");
+const arch_types = @import("types.zig");
+pub const Phys = common_types.Phys;
+pub const Virt = arch_types.Virt;
+
 pub const PAGE_SIZE = 4096;
 pub const PAGE_SHIFT = 12;
 pub const LARGE_PAGE_SIZE = 2 * 1024 * 1024;
@@ -55,101 +60,7 @@ pub const HUGE_PAGE_SHIFT = 30;
 
 pub const ENTRIES_PER_TABLE = 512;
 
-/// Physical address wrapper
-pub const Phys = struct {
-    value: u64,
-
-    pub fn from(addr: u64) Phys {
-        return .{ .value = addr };
-    }
-
-    pub fn fromPtr(ptr: anytype) Phys {
-        return .{ .value = @intFromPtr(ptr) };
-    }
-
-    pub fn raw(self: Phys) u64 {
-        return self.value;
-    }
-
-    pub fn toPtr(self: Phys, comptime T: type) T {
-        return @ptrFromInt(self.value);
-    }
-
-    pub fn add(self: Phys, offset: u64) Phys {
-        return .{ .value = self.value + offset };
-    }
-
-    pub fn alignDown(self: Phys, comptime alignment: u64) Phys {
-        return .{ .value = self.value & ~(alignment - 1) };
-    }
-
-    pub fn alignUp(self: Phys, comptime alignment: u64) Phys {
-        return .{ .value = (self.value + alignment - 1) & ~(alignment - 1) };
-    }
-
-    pub fn isAligned(self: Phys, comptime alignment: u64) bool {
-        return (self.value & (alignment - 1)) == 0;
-    }
-};
-
-/// Virtual address wrapper
-pub const Virt = struct {
-    value: u64,
-
-    pub fn from(addr: u64) Virt {
-        return .{ .value = addr };
-    }
-
-    pub fn fromPtr(ptr: anytype) Virt {
-        return .{ .value = @intFromPtr(ptr) };
-    }
-
-    pub fn raw(self: Virt) u64 {
-        return self.value;
-    }
-
-    pub fn toPtr(self: Virt, comptime T: type) T {
-        return @ptrFromInt(self.value);
-    }
-
-    pub fn add(self: Virt, offset: u64) Virt {
-        return .{ .value = self.value + offset };
-    }
-
-    pub fn pml4Index(self: Virt) u9 {
-        return @truncate((self.value >> 39) & 0x1FF);
-    }
-
-    pub fn pdptIndex(self: Virt) u9 {
-        return @truncate((self.value >> 30) & 0x1FF);
-    }
-
-    pub fn pdIndex(self: Virt) u9 {
-        return @truncate((self.value >> 21) & 0x1FF);
-    }
-
-    pub fn ptIndex(self: Virt) u9 {
-        return @truncate((self.value >> 12) & 0x1FF);
-    }
-
-    pub fn pageOffset(self: Virt) u12 {
-        return @truncate(self.value & 0xFFF);
-    }
-
-    pub fn alignDown(self: Virt, comptime alignment: u64) Virt {
-        return .{ .value = self.value & ~(alignment - 1) };
-    }
-
-    pub fn alignUp(self: Virt, comptime alignment: u64) Virt {
-        return .{ .value = (self.value + alignment - 1) & ~(alignment - 1) };
-    }
-
-    pub fn isAligned(self: Virt, comptime alignment: u64) bool {
-        return (self.value & (alignment - 1)) == 0;
-    }
-};
-
-/// Mapping flags for pages and tables.
+/// Mapping for pages and tables.
 pub const Flags = struct {
     writable: bool = true,
     user: bool = false,
@@ -159,7 +70,7 @@ pub const Flags = struct {
     cache_disable: bool = false,
 };
 
-/// Raw page table entry - (PML4E, PDPTE, PDE, PTE)
+/// Raw page table entry: PML4E, PDPTE, PDE, PTE
 pub const RawEntry = packed struct(u64) {
     present: bool = false,
     writable: bool = false,
@@ -192,7 +103,7 @@ pub const RawEntry = packed struct(u64) {
     }
 };
 
-/// PML4 Entry - points to PDPT.
+/// PML4 Entry: points to PDPT.
 pub const PML4E = struct {
     raw: RawEntry,
 
@@ -221,7 +132,7 @@ pub const PML4E = struct {
     }
 };
 
-/// PML4 Table - 512 entries, each pointing to a PDPT.
+/// PML4 Table: 512 entries, each pointing to a PDPT.
 pub const PML4 = struct {
     entries: [ENTRIES_PER_TABLE]PML4E,
 
@@ -238,7 +149,7 @@ pub const PML4 = struct {
     }
 };
 
-/// PDPT Entry - points to PD or maps 1GB huge page.
+/// PDPT Entry: points to PD _or_ maps 1GB huge page.
 pub const PDPTE = struct {
     raw: RawEntry,
 
@@ -285,7 +196,7 @@ pub const PDPTE = struct {
     }
 };
 
-/// PDPT Table - 512 entries.
+/// PDPT Table: 512 entries.
 pub const PDPT = struct {
     entries: [ENTRIES_PER_TABLE]PDPTE,
 
@@ -302,7 +213,7 @@ pub const PDPT = struct {
     }
 };
 
-/// PD Entry - points to PT or maps 2MB large page.
+/// PD Entry: points to PT _or_ maps 2MB large page.
 pub const PDE = struct {
     raw: RawEntry,
 
@@ -349,7 +260,7 @@ pub const PDE = struct {
     }
 };
 
-/// PD Table - 512 entries.
+/// PD Table: 512 entries.
 pub const PD = struct {
     entries: [ENTRIES_PER_TABLE]PDE,
 
@@ -366,7 +277,7 @@ pub const PD = struct {
     }
 };
 
-/// PT Entry - maps 4KB page.
+/// PT Entry: maps 4KB page.
 pub const PTE = struct {
     raw: RawEntry,
 
@@ -396,7 +307,7 @@ pub const PTE = struct {
     }
 };
 
-/// PT Table - 512 entries.
+/// PT Table: 512 entries.
 pub const PT = struct {
     entries: [ENTRIES_PER_TABLE]PTE,
 

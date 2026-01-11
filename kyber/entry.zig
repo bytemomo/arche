@@ -1,5 +1,5 @@
 
-export fn _entry() callconv(.naked) noreturn {
+export fn _start() callconv(.naked) noreturn {
     while (true) {
         asm volatile("hlt");
     }

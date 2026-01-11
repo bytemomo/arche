@@ -14,6 +14,7 @@ const PDE = paging.PDE;
 
 const Phys = paging.Phys;
 const Virt = paging.Virt;
+const Size = arch.types.Size;
 const Flags = paging.Flags;
 
 const PAGE_SIZE = paging.PAGE_SIZE;
@@ -39,9 +40,9 @@ pub const PageTables = struct {
     }
 
     /// Identity map a range using 2MB large pages.
-    pub fn identityMap2M(self: *Self, start: Phys, size: u64, flags: Flags) !void {
+    pub fn identityMap2M(self: *Self, start: Phys, size: Size, flags: Flags) !void {
         const aligned_start = start.alignDown(LARGE_PAGE_SIZE);
-        const end = start.add(size);
+        const end = start.add(size.raw());
         const aligned_end = end.alignUp(LARGE_PAGE_SIZE);
 
         var addr = aligned_start;
@@ -59,7 +60,6 @@ pub const PageTables = struct {
 
     /// Map a single 2MB large page.
     fn mapLargePage(self: *Self, virt: Virt, phys: Phys, flags: Flags) !void {
-        // Ensure PDPT exists
         if (!self.pml4.getEntry(virt.pml4Index()).isPresent()) {
             const pdpt = try allocTable(PDPT, self.services);
             pdpt.* = PDPT.empty();
@@ -69,7 +69,6 @@ pub const PageTables = struct {
         const pdpt_phys = self.pml4.getEntry(virt.pml4Index()).getPDPT().?;
         const pdpt: *PDPT = pdpt_phys.toPtr(*PDPT);
 
-        // Ensure PD exists
         if (!pdpt.getEntry(virt.pdptIndex()).isPresent()) {
             const pd = try allocTable(PD, self.services);
             pd.* = PD.empty();
