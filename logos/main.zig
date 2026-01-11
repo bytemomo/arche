@@ -74,11 +74,11 @@ pub fn main() uefi.Status {
         return .aborted;
     };
 
-    page_tables.identityMap2M(0, 4 * 1024 * 1024 * 1024, .{ .writable = true }) catch |err| {
+    page_tables.identityMap2M(arch.paging.Phys.from(0), 4 * 1024 * 1024 * 1024, .{ .writable = true }) catch |err| {
         log.err("Failed to identity map: {}", .{err});
         return .aborted;
     };
-    log.info("Page tables ready, CR3=0x{x}", .{page_tables.getCr3()});
+    log.info("Page tables ready, CR3=0x{x}", .{page_tables.getCr3().raw()});
 
     svc.stallSec(5);
 

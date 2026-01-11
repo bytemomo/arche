@@ -55,6 +55,100 @@ pub const HUGE_PAGE_SHIFT = 30;
 
 pub const ENTRIES_PER_TABLE = 512;
 
+/// Physical address wrapper
+pub const Phys = struct {
+    value: u64,
+
+    pub fn from(addr: u64) Phys {
+        return .{ .value = addr };
+    }
+
+    pub fn fromPtr(ptr: anytype) Phys {
+        return .{ .value = @intFromPtr(ptr) };
+    }
+
+    pub fn raw(self: Phys) u64 {
+        return self.value;
+    }
+
+    pub fn toPtr(self: Phys, comptime T: type) T {
+        return @ptrFromInt(self.value);
+    }
+
+    pub fn add(self: Phys, offset: u64) Phys {
+        return .{ .value = self.value + offset };
+    }
+
+    pub fn alignDown(self: Phys, comptime alignment: u64) Phys {
+        return .{ .value = self.value & ~(alignment - 1) };
+    }
+
+    pub fn alignUp(self: Phys, comptime alignment: u64) Phys {
+        return .{ .value = (self.value + alignment - 1) & ~(alignment - 1) };
+    }
+
+    pub fn isAligned(self: Phys, comptime alignment: u64) bool {
+        return (self.value & (alignment - 1)) == 0;
+    }
+};
+
+/// Virtual address wrapper
+pub const Virt = struct {
+    value: u64,
+
+    pub fn from(addr: u64) Virt {
+        return .{ .value = addr };
+    }
+
+    pub fn fromPtr(ptr: anytype) Virt {
+        return .{ .value = @intFromPtr(ptr) };
+    }
+
+    pub fn raw(self: Virt) u64 {
+        return self.value;
+    }
+
+    pub fn toPtr(self: Virt, comptime T: type) T {
+        return @ptrFromInt(self.value);
+    }
+
+    pub fn add(self: Virt, offset: u64) Virt {
+        return .{ .value = self.value + offset };
+    }
+
+    pub fn pml4Index(self: Virt) u9 {
+        return @truncate((self.value >> 39) & 0x1FF);
+    }
+
+    pub fn pdptIndex(self: Virt) u9 {
+        return @truncate((self.value >> 30) & 0x1FF);
+    }
+
+    pub fn pdIndex(self: Virt) u9 {
+        return @truncate((self.value >> 21) & 0x1FF);
+    }
+
+    pub fn ptIndex(self: Virt) u9 {
+        return @truncate((self.value >> 12) & 0x1FF);
+    }
+
+    pub fn pageOffset(self: Virt) u12 {
+        return @truncate(self.value & 0xFFF);
+    }
+
+    pub fn alignDown(self: Virt, comptime alignment: u64) Virt {
+        return .{ .value = self.value & ~(alignment - 1) };
+    }
+
+    pub fn alignUp(self: Virt, comptime alignment: u64) Virt {
+        return .{ .value = (self.value + alignment - 1) & ~(alignment - 1) };
+    }
+
+    pub fn isAligned(self: Virt, comptime alignment: u64) bool {
+        return (self.value & (alignment - 1)) == 0;
+    }
+};
+
 /// Mapping flags for pages and tables.
 pub const Flags = struct {
     writable: bool = true,
@@ -106,20 +200,20 @@ pub const PML4E = struct {
         return .{ .raw = RawEntry.empty() };
     }
 
-    pub fn table(pdpt: *PDPT, flags: Flags) PML4E {
+    pub fn table(pdpt_phys: Phys, flags: Flags) PML4E {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
             .user = flags.user,
             .write_through = flags.write_through,
             .cache_disable = flags.cache_disable,
-            .phys_addr = @truncate(@intFromPtr(pdpt) >> PAGE_SHIFT),
+            .phys_addr = @truncate(pdpt_phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn getPDPT(self: PML4E) ?*PDPT {
+    pub fn getPDPT(self: PML4E) ?Phys {
         if (!self.raw.isPresent()) return null;
-        return @ptrFromInt(self.raw.getPhysAddr());
+        return Phys.from(self.raw.getPhysAddr());
     }
 
     pub fn isPresent(self: PML4E) bool {
@@ -152,18 +246,18 @@ pub const PDPTE = struct {
         return .{ .raw = RawEntry.empty() };
     }
 
-    pub fn table(pd: *PD, flags: Flags) PDPTE {
+    pub fn table(pd_phys: Phys, flags: Flags) PDPTE {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
             .user = flags.user,
             .write_through = flags.write_through,
             .cache_disable = flags.cache_disable,
-            .phys_addr = @truncate(@intFromPtr(pd) >> PAGE_SHIFT),
+            .phys_addr = @truncate(pd_phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn hugePage(phys: u64, flags: Flags) PDPTE {
+    pub fn hugePage(phys: Phys, flags: Flags) PDPTE {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
@@ -173,13 +267,13 @@ pub const PDPTE = struct {
             .huge_page = true,
             .global = flags.global,
             .no_execute = flags.no_execute,
-            .phys_addr = @truncate(phys >> PAGE_SHIFT),
+            .phys_addr = @truncate(phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn getPD(self: PDPTE) ?*PD {
+    pub fn getPD(self: PDPTE) ?Phys {
         if (!self.raw.isPresent() or self.raw.isHuge()) return null;
-        return @ptrFromInt(self.raw.getPhysAddr());
+        return Phys.from(self.raw.getPhysAddr());
     }
 
     pub fn isPresent(self: PDPTE) bool {
@@ -216,18 +310,18 @@ pub const PDE = struct {
         return .{ .raw = RawEntry.empty() };
     }
 
-    pub fn table(pt: *PT, flags: Flags) PDE {
+    pub fn table(pt_phys: Phys, flags: Flags) PDE {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
             .user = flags.user,
             .write_through = flags.write_through,
             .cache_disable = flags.cache_disable,
-            .phys_addr = @truncate(@intFromPtr(pt) >> PAGE_SHIFT),
+            .phys_addr = @truncate(pt_phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn largePage(phys: u64, flags: Flags) PDE {
+    pub fn largePage(phys: Phys, flags: Flags) PDE {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
@@ -237,13 +331,13 @@ pub const PDE = struct {
             .huge_page = true,
             .global = flags.global,
             .no_execute = flags.no_execute,
-            .phys_addr = @truncate(phys >> PAGE_SHIFT),
+            .phys_addr = @truncate(phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn getPT(self: PDE) ?*PT {
+    pub fn getPT(self: PDE) ?Phys {
         if (!self.raw.isPresent() or self.raw.isHuge()) return null;
-        return @ptrFromInt(self.raw.getPhysAddr());
+        return Phys.from(self.raw.getPhysAddr());
     }
 
     pub fn isPresent(self: PDE) bool {
@@ -280,7 +374,7 @@ pub const PTE = struct {
         return .{ .raw = RawEntry.empty() };
     }
 
-    pub fn page(phys: u64, flags: Flags) PTE {
+    pub fn page(phys: Phys, flags: Flags) PTE {
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
@@ -289,12 +383,12 @@ pub const PTE = struct {
             .cache_disable = flags.cache_disable,
             .global = flags.global,
             .no_execute = flags.no_execute,
-            .phys_addr = @truncate(phys >> PAGE_SHIFT),
+            .phys_addr = @truncate(phys.raw() >> PAGE_SHIFT),
         } };
     }
 
-    pub fn getPhysAddr(self: PTE) u64 {
-        return self.raw.getPhysAddr();
+    pub fn getPhys(self: PTE) Phys {
+        return Phys.from(self.raw.getPhysAddr());
     }
 
     pub fn isPresent(self: PTE) bool {
@@ -318,43 +412,3 @@ pub const PT = struct {
         return self.entries[index];
     }
 };
-
-pub const VirtAddr = struct {
-    value: u64,
-
-    pub fn from(addr: u64) VirtAddr {
-        return .{ .value = addr };
-    }
-
-    pub fn pml4Index(self: VirtAddr) u9 {
-        return @truncate((self.value >> 39) & 0x1FF);
-    }
-
-    pub fn pdptIndex(self: VirtAddr) u9 {
-        return @truncate((self.value >> 30) & 0x1FF);
-    }
-
-    pub fn pdIndex(self: VirtAddr) u9 {
-        return @truncate((self.value >> 21) & 0x1FF);
-    }
-
-    pub fn ptIndex(self: VirtAddr) u9 {
-        return @truncate((self.value >> 12) & 0x1FF);
-    }
-
-    pub fn pageOffset(self: VirtAddr) u12 {
-        return @truncate(self.value & 0xFFF);
-    }
-};
-
-pub fn alignDown(addr: u64, comptime alignment: u64) u64 {
-    return addr & ~(alignment - 1);
-}
-
-pub fn alignUp(addr: u64, comptime alignment: u64) u64 {
-    return alignDown(addr + alignment - 1, alignment);
-}
-
-pub fn pagesNeeded(size: u64, comptime page_size: u64) u64 {
-    return alignUp(size, page_size) / page_size;
-}
