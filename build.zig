@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const out_dir_name = "img";
+const cpu_arch: std.Target.Cpu.Arch = .x86_64;
 
 pub fn build(b: *std.Build) void {
     const options = b.addOptions();
@@ -56,13 +57,23 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     options.addOption(std.log.Level, "log_level", log_level);
 }
 
+fn createArchModule(b: *std.Build, comptime arch: std.Target.Cpu.Arch) *std.Build.Module {
+    const arch_path = switch (arch) {
+        .x86_64 => "common/arch/x86_64.zig",
+        else => @compileError("Unsupported architecture"),
+    };
+    return b.createModule(.{
+        .root_source_file = b.path(arch_path),
+    });
+}
+
 fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
     const kyber = b.addExecutable(.{
         .name = "kyber.elf",
         .root_module = b.createModule(.{
             .root_source_file = b.path("kyber/entry.zig"),
             .target = b.resolveTargetQuery(.{
-                .cpu_arch = .x86_64,
+                .cpu_arch = cpu_arch,
                 .os_tag = .freestanding,
                 .ofmt = .elf,
             }),
@@ -74,6 +85,7 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     });
     kyber.entry = .{ .symbol_name = "_entry" };
     kyber.root_module.addOptions("option", options);
+    kyber.root_module.addImport("arch", createArchModule(b, cpu_arch));
     b.installArtifact(kyber);
 
     const install_kyber = b.addInstallFile(
@@ -87,12 +99,13 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
 }
 
 fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
+
     const logos = b.addExecutable(.{
         .name = "BOOTX64.EFI",
         .root_module = b.createModule(.{
             .root_source_file = b.path("logos/main.zig"),
             .target = b.resolveTargetQuery(.{
-                .cpu_arch = .x86_64,
+                .cpu_arch = cpu_arch,
                 .os_tag =  .uefi,
             }),
             .optimize = optimize,
@@ -102,6 +115,7 @@ fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     });
     logos.subsystem = .EfiApplication;
     logos.root_module.addOptions("option", options);
+    logos.root_module.addImport("arch", createArchModule(b, cpu_arch));
     b.installArtifact(logos);
 
     const install_logos = b.addInstallFile(
