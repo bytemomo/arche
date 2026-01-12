@@ -42,17 +42,17 @@ pub fn build(b: *std.Build) void {
 
 
 fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
-    const s_log_level = b.option([]const u8, "log_level", "log_level") orelse "info";
+    const s_log_level = b.option([]const u8, "log_level", "log_level") orelse "Info";
 
     const log_level: std.log.Level = b: {
         const eql = std.mem.eql;
-        break :b if (eql(u8, s_log_level, "debug"))
+        break :b if (eql(u8, s_log_level, "Debug"))
             .debug
-        else if (eql(u8, s_log_level, "info"))
+        else if (eql(u8, s_log_level, "Info"))
             .info
-        else if (eql(u8, s_log_level, "warn"))
+        else if (eql(u8, s_log_level, "Warn"))
             .warn
-        else if (eql(u8, s_log_level, "error"))
+        else if (eql(u8, s_log_level, "Error"))
             .err
         else
             @panic("Invalid log level");

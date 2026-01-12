@@ -48,14 +48,16 @@
 
 const common_types = @import("types");
 const arch_types = @import("types.zig");
+
+pub const Size = common_types.Size;
 pub const Phys = common_types.Phys;
 pub const Virt = arch_types.Virt;
 
 pub const PAGE_SIZE = 4096;
 pub const PAGE_SHIFT = 12;
-pub const LARGE_PAGE_SIZE = 2 * 1024 * 1024;
+pub const LARGE_PAGE_SIZE = Size.mib(2).value;
 pub const LARGE_PAGE_SHIFT = 21;
-pub const HUGE_PAGE_SIZE = 1024 * 1024 * 1024;
+pub const HUGE_PAGE_SIZE = Size.gib(1).value;
 pub const HUGE_PAGE_SHIFT = 30;
 
 pub const ENTRIES_PER_TABLE = 512;
@@ -169,6 +171,7 @@ pub const PDPTE = struct {
     }
 
     pub fn hugePage(phys: Phys, flags: Flags) PDPTE {
+        const frame = phys.raw() >> HUGE_PAGE_SHIFT;
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
@@ -178,7 +181,7 @@ pub const PDPTE = struct {
             .huge_page = true,
             .global = flags.global,
             .no_execute = flags.no_execute,
-            .phys_addr = @truncate(phys.raw() >> PAGE_SHIFT),
+            .phys_addr = @truncate(frame << (HUGE_PAGE_SHIFT - PAGE_SHIFT)),
         } };
     }
 
@@ -233,6 +236,7 @@ pub const PDE = struct {
     }
 
     pub fn largePage(phys: Phys, flags: Flags) PDE {
+        const frame = phys.raw() >> LARGE_PAGE_SHIFT;
         return .{ .raw = .{
             .present = true,
             .writable = flags.writable,
@@ -242,7 +246,7 @@ pub const PDE = struct {
             .huge_page = true,
             .global = flags.global,
             .no_execute = flags.no_execute,
-            .phys_addr = @truncate(phys.raw() >> PAGE_SHIFT),
+            .phys_addr = @truncate(frame << (LARGE_PAGE_SHIFT - PAGE_SHIFT)),
         } };
     }
 

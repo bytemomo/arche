@@ -10,6 +10,12 @@ pub const FileSystem = struct {
 
     const Self = @This();
 
+    pub fn close(self: *const Self) void {
+        self.root.close() catch |err| {
+            log.warn("Failed to close root directory: {}", .{err});
+        };
+    }
+
     pub fn init(services: Services) !Self {
         const proto = services.raw().locateProtocol(
             uefi.protocol.SimpleFileSystem,

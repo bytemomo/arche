@@ -47,7 +47,6 @@ pub const PageTables = struct {
 
         var addr = aligned_start;
         while (addr.raw() < aligned_end.raw()) : (addr = addr.add(LARGE_PAGE_SIZE)) {
-            // Identity map: virt == phys
             try self.mapLargePage(Virt.from(addr.raw()), addr, flags);
         }
 
@@ -59,7 +58,7 @@ pub const PageTables = struct {
     }
 
     /// Map a single 2MB large page.
-    fn mapLargePage(self: *Self, virt: Virt, phys: Phys, flags: Flags) !void {
+    pub fn mapLargePage(self: *Self, virt: Virt, phys: Phys, flags: Flags) !void {
         if (!self.pml4.getEntry(virt.pml4Index()).isPresent()) {
             const pdpt = try allocTable(PDPT, self.services);
             pdpt.* = PDPT.empty();
@@ -78,7 +77,6 @@ pub const PageTables = struct {
         const pd_phys = pdpt.getEntry(virt.pdptIndex()).getPD().?;
         const pd: *PD = pd_phys.toPtr(*PD);
 
-        // Set the 2MB large page entry
         pd.setEntry(virt.pdIndex(), PDE.largePage(phys, flags));
     }
 
