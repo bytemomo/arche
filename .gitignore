@@ -19,3 +19,4 @@
 !/kyber/
 !/kyber/**/
 !/kyber/**/*.zig
+!/kyber/linker.ld

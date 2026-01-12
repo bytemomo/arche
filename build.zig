@@ -54,6 +54,15 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
             .warn
         else if (eql(u8, s_log_level, "Error"))
             .err
+
+        // This are usefull when we want to have a certain log level
+        // with certain build types
+        else if (eql(u8, s_log_level, "ReleaseFast"))
+            .warn
+        else if (eql(u8, s_log_level, "Release"))
+            .warn
+        else if (eql(u8, s_log_level, "ReleaseSafe"))
+            .warn
         else
             @panic("Invalid log level");
     };

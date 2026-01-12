@@ -14,8 +14,8 @@
 //! │                         │  Stack (1MB/CPU) │                     │
 //! │ 0xFFFF_C000_8000_0000   ├──────────────────┤                     │
 //! │                         │  Kyber image     │                     │
-//! │ 0xFFFF_C000_0010_0000   ├──────────────────┤ ← KERNEL_TEXT       │
-//! │                         │  (guard page)    │                     │
+//! │ 0xFFFF_C000_0020_0000   ├──────────────────┤ ← KERNEL_TEXT       │
+//! │                         │  (guard 2MB)     │                     │
 //! │ 0xFFFF_C000_0000_0000   ├──────────────────┤ ← KERNEL_BASE       │
 //! │                         │    (unused)      │                     │
 //! │ 0xFFFF_A000_0000_0000   ├──────────────────┤ ← PHYS_MAP_BASE     │
@@ -38,7 +38,7 @@ const Size = common_types.Size;
 pub const PHYS_MAP_BASE = Virt.from(0xFFFF_A000_0000_0000);
 pub const PHYS_MAP_SIZE = Size.tib(2);
 pub const KERNEL_BASE = Virt.from(0xFFFF_C000_0000_0000);
-pub const KERNEL_TEXT = Virt.from(0xFFFF_C000_0010_0000);
+pub const KERNEL_TEXT = Virt.from(0xFFFF_C000_0020_0000);
 pub const KERNEL_STACK_BASE = Virt.from(0xFFFF_C000_8000_0000);
 pub const KERNEL_STACK_SIZE = Size.mib(1);
 pub const KERNEL_HEAP_BASE = Virt.from(0xFFFF_C001_0000_0000);
