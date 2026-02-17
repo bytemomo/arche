@@ -4,7 +4,7 @@ const elf = std.elf;
 
 const Services = @import("../uefi/services.zig").Services;
 
-const log = std.log.scoped(.elf_loader);
+const log = std.log.scoped(.logos__elf_loader);
 
 pub const LoadError = error{
     InvalidMagic,

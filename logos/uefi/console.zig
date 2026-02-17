@@ -1,7 +1,10 @@
 const std = @import("std");
 const uefi = std.os.uefi;
 
-pub const Console = struct {
+pub const init = Console.init;
+pub const writer = Console.writer;
+
+const Console = struct {
     var out: ?*uefi.protocol.SimpleTextOutput = null;
 
     pub fn init() !void {
@@ -14,12 +17,12 @@ pub const Console = struct {
         }
     }
 
-    pub fn writer(buffer: []u8) !Writer {
+    pub fn writer() !Writer {
         const o = out orelse return error.ConsoleNotInitialized;
         return .{
             .context = o,
             .interface = .{
-                .buffer = buffer,
+                .buffer = &.{},
                 .vtable = &Writer.vtable,
             },
         };

@@ -88,6 +88,17 @@ fn createArchModule(b: *std.Build, comptime arch: std.Target.Cpu.Arch, types_mod
     return mod;
 }
 
+fn createLogModule(b: *std.Build, writer_path: std.Build.LazyPath) *std.Build.Module {
+    const writer_mod = b.createModule(.{
+        .root_source_file = writer_path,
+    });
+    const mod = b.createModule(.{
+        .root_source_file = b.path("common/log.zig"),
+    });
+    mod.addImport("writer", writer_mod);
+    return mod;
+}
+
 fn createBootInfoModule(b: *std.Build, types_module: *std.Build.Module) *std.Build.Module {
     const mod = b.createModule(.{
         .root_source_file = b.path("common/boot_info.zig"),
@@ -119,6 +130,7 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     kyber.root_module.addImport("types", kyber_types);
     kyber.root_module.addImport("arch", createArchModule(b, cpu_arch, kyber_types));
     kyber.root_module.addImport("boot_info", createBootInfoModule(b, kyber_types));
+    kyber.root_module.addImport("log", createLogModule(b, b.path("kyber/arch/x86_64/serial.zig")));
     b.installArtifact(kyber);
 
     const install_kyber = b.addInstallFile(
@@ -152,6 +164,7 @@ fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     logos.root_module.addImport("types", logos_types);
     logos.root_module.addImport("arch", createArchModule(b, cpu_arch, logos_types));
     logos.root_module.addImport("boot_info", createBootInfoModule(b, logos_types));
+    logos.root_module.addImport("log", createLogModule(b, b.path("logos/uefi/console.zig")));
     b.installArtifact(logos);
 
     const install_logos = b.addInstallFile(

@@ -8,7 +8,7 @@ const paging = @import("../arch/x86_64/paging.zig");
 const elf_loader = @import("elf.zig");
 const boot_info = @import("boot_info");
 
-const log = std.log.scoped(.handoff);
+const log = std.log.scoped(.logos__handoff);
 
 const PageTables = paging.PageTables;
 const BootInfo = boot_info.BootInfo;

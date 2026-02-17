@@ -2,7 +2,7 @@ const std = @import("std");
 const arch = @import("arch");
 const Services = @import("../../uefi/services.zig").Services;
 
-const log = std.log.scoped(.paging);
+const log = std.log.scoped(.logos__paging);
 
 const paging = arch.paging;
 const PML4 = paging.PML4;
