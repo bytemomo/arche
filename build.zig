@@ -7,9 +7,12 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     setup(b, options);
 
-    const  optimize = b.standardOptimizeOption(.{ });
+    const optimize = b.standardOptimizeOption(.{});
     _ = setupKyber(b, options, optimize);
-    _= setupLogos(b, options, optimize);
+    _ = setupLogos(b, options, optimize);
+    setupTests(b, options);
+    setupSimHeadless(b, options, optimize);
+    setupSimWeb(b, options, optimize);
 
     // use qemu as run method
     const qemu_args = [_][]const u8{
@@ -88,15 +91,18 @@ fn createArchModule(b: *std.Build, comptime arch: std.Target.Cpu.Arch, types_mod
     return mod;
 }
 
-fn createLogModule(b: *std.Build, writer_path: std.Build.LazyPath) *std.Build.Module {
-    const writer_mod = b.createModule(.{
-        .root_source_file = writer_path,
-    });
+fn createLogModule(b: *std.Build, writer_mod: *std.Build.Module) *std.Build.Module {
     const mod = b.createModule(.{
         .root_source_file = b.path("common/log.zig"),
     });
     mod.addImport("writer", writer_mod);
     return mod;
+}
+
+fn createWriterModule(b: *std.Build, writer_path: std.Build.LazyPath) *std.Build.Module {
+    return b.createModule(.{
+        .root_source_file = writer_path,
+    });
 }
 
 fn createBootInfoModule(b: *std.Build, types_module: *std.Build.Module) *std.Build.Module {
@@ -130,7 +136,7 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     kyber.root_module.addImport("types", kyber_types);
     kyber.root_module.addImport("arch", createArchModule(b, cpu_arch, kyber_types));
     kyber.root_module.addImport("boot_info", createBootInfoModule(b, kyber_types));
-    kyber.root_module.addImport("log", createLogModule(b, b.path("kyber/arch/x86_64/serial.zig")));
+    kyber.root_module.addImport("log", createLogModule(b, createWriterModule(b, b.path("kyber/arch/x86_64/serial.zig"))));
     b.installArtifact(kyber);
 
     const install_kyber = b.addInstallFile(
@@ -143,15 +149,58 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     return kyber;
 }
 
-fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
+fn setupTests(b: *std.Build, options: *std.Build.Step.Options) void {
+    const test_step = b.step("test", "Run unit tests");
+    const types_mod = createTypesModule(b);
 
+    // Common module tests
+    const common_paths = [_][]const u8{
+        "common/types.zig",
+        "common/arch/x86_64/types.zig",
+        "common/arch/x86_64/paging.zig",
+        "common/arch/x86_64/layout.zig",
+        "common/boot_info.zig",
+    };
+
+    for (common_paths) |path| {
+        const mod = b.createModule(.{
+            .root_source_file = b.path(path),
+            .target = b.graph.host,
+        });
+        mod.addImport("types", types_mod);
+        const t = b.addTest(.{ .root_module = mod });
+        test_step.dependOn(&b.addRunArtifact(t).step);
+    }
+
+    // Simulation module tests
+    const sim_mods = createSimModules(b);
+    const sim_paths = [_][]const u8{
+        "sim/core.zig",
+        "sim/fake_port_io.zig",
+        "sim/fake_memory.zig",
+        "sim/tests/paging_fuzz.zig",
+        "sim/tests/boot_fuzz.zig",
+    };
+
+    for (sim_paths) |path| {
+        const mod = b.createModule(.{
+            .root_source_file = b.path(path),
+            .target = b.graph.host,
+        });
+        addSimImports(mod, sim_mods, options);
+        const t = b.addTest(.{ .root_module = mod });
+        test_step.dependOn(&b.addRunArtifact(t).step);
+    }
+}
+
+fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
     const logos = b.addExecutable(.{
         .name = "BOOTX64.EFI",
         .root_module = b.createModule(.{
             .root_source_file = b.path("logos/main.zig"),
             .target = b.resolveTargetQuery(.{
                 .cpu_arch = cpu_arch,
-                .os_tag =  .uefi,
+                .os_tag = .uefi,
             }),
             .optimize = optimize,
         }),
@@ -164,15 +213,146 @@ fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     logos.root_module.addImport("types", logos_types);
     logos.root_module.addImport("arch", createArchModule(b, cpu_arch, logos_types));
     logos.root_module.addImport("boot_info", createBootInfoModule(b, logos_types));
-    logos.root_module.addImport("log", createLogModule(b, b.path("logos/uefi/console.zig")));
+    logos.root_module.addImport("log", createLogModule(b, createWriterModule(b, b.path("logos/uefi/console.zig"))));
     b.installArtifact(logos);
 
     const install_logos = b.addInstallFile(
         logos.getEmittedBin(),
-        b.fmt("{s}/efi/boot/{s}", .{ out_dir_name, logos.name })
+        b.fmt("{s}/efi/boot/{s}", .{ out_dir_name, logos.name }),
     );
     install_logos.step.dependOn(&logos.step);
     b.getInstallStep().dependOn(&install_logos.step);
 
     return logos;
+}
+
+// --- Simulation (DST) targets ---
+
+fn createSimModules(b: *std.Build) struct {
+    types: *std.Build.Module,
+    arch: *std.Build.Module,
+    boot_info: *std.Build.Module,
+    log: *std.Build.Module,
+    core: *std.Build.Module,
+    fake_port_io: *std.Build.Module,
+    fake_memory: *std.Build.Module,
+    writer: *std.Build.Module,
+} {
+    const sim_types = createTypesModule(b);
+    const sim_arch = createArchModule(b, cpu_arch, sim_types);
+    const sim_boot_info = createBootInfoModule(b, sim_types);
+    const sim_writer = createWriterModule(b, b.path("sim/writer.zig"));
+    const sim_log = createLogModule(b, sim_writer);
+
+    const sim_core = b.createModule(.{
+        .root_source_file = b.path("sim/core.zig"),
+    });
+
+    const sim_fake_port_io = b.createModule(.{
+        .root_source_file = b.path("sim/fake_port_io.zig"),
+    });
+    sim_fake_port_io.addImport("core", sim_core);
+
+    const sim_fake_memory = b.createModule(.{
+        .root_source_file = b.path("sim/fake_memory.zig"),
+    });
+    sim_fake_memory.addImport("core", sim_core);
+    sim_fake_memory.addImport("types", sim_types);
+
+    return .{
+        .types = sim_types,
+        .arch = sim_arch,
+        .boot_info = sim_boot_info,
+        .log = sim_log,
+        .core = sim_core,
+        .fake_port_io = sim_fake_port_io,
+        .fake_memory = sim_fake_memory,
+        .writer = sim_writer,
+    };
+}
+
+fn addSimImports(root: *std.Build.Module, mods: anytype, options: *std.Build.Step.Options) void {
+    root.addOptions("option", options);
+    root.addImport("types", mods.types);
+    root.addImport("arch", mods.arch);
+    root.addImport("boot_info", mods.boot_info);
+    root.addImport("log", mods.log);
+    root.addImport("core", mods.core);
+    root.addImport("fake_port_io", mods.fake_port_io);
+    root.addImport("fake_memory", mods.fake_memory);
+    root.addImport("writer", mods.writer);
+}
+
+fn setupSimHeadless(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) void {
+    const sim_mods = createSimModules(b);
+
+    const sim_exe = b.addExecutable(.{
+        .name = "arche-sim",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("sim/main.zig"),
+            .target = b.graph.host,
+            .optimize = optimize,
+        }),
+    });
+    addSimImports(sim_exe.root_module, sim_mods, options);
+
+    const install_sim = b.addInstallArtifact(sim_exe, .{
+        .dest_dir = .{ .override = .{ .custom = "sim" } },
+    });
+
+    const run_sim = b.addRunArtifact(sim_exe);
+    run_sim.step.dependOn(&install_sim.step);
+
+    const sim_step = b.step("sim-headless", "Run DST simulation (host-native)");
+    sim_step.dependOn(&run_sim.step);
+}
+
+fn setupSimWeb(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) void {
+    const mods = createSimModules(b);
+    const web_dir = "sim/web";
+
+    const sim_wasm = b.addExecutable(.{
+        .name = "arche-sim",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("sim/main.zig"),
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .wasm32,
+                .os_tag = .freestanding,
+            }),
+            .optimize = optimize,
+        }),
+    });
+    sim_wasm.entry = .disabled;
+    sim_wasm.rdynamic = true;
+    sim_wasm.stack_size = 4 * 1024 * 1024; // 4 MiB stack for large static structs
+    addSimImports(sim_wasm.root_module, mods, options);
+
+    // Install wasm binary into web dir
+    const install_wasm = b.addInstallFile(
+        sim_wasm.getEmittedBin(),
+        b.fmt("{s}/arche-sim.wasm", .{web_dir}),
+    );
+    install_wasm.step.dependOn(&sim_wasm.step);
+
+    // Install static web files
+    const install_html = b.addInstallFile(
+        b.path("sim/web/index.html"),
+        b.fmt("{s}/index.html", .{web_dir}),
+    );
+    const install_js = b.addInstallFile(
+        b.path("sim/web/index.js"),
+        b.fmt("{s}/index.js", .{web_dir}),
+    );
+
+    // Start web server serving the output directory
+    const serve = b.addSystemCommand(&.{
+        "python3", "-m", "http.server", "8080", "--directory",
+        b.fmt("{s}/{s}", .{ b.install_path, web_dir }),
+    });
+    serve.step.dependOn(&install_wasm.step);
+    serve.step.dependOn(&install_html.step);
+    serve.step.dependOn(&install_js.step);
+
+    const wasm_step = b.step("sim-web", "Build and serve DST simulation (wasm32)");
+    wasm_step.dependOn(&serve.step);
 }

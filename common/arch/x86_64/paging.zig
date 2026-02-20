@@ -327,3 +327,88 @@ pub const PT = struct {
         return self.entries[index];
     }
 };
+
+const testing = @import("std").testing;
+
+test "RawEntry encode/decode phys_addr roundtrip" {
+    const addr: u64 = 0x0000_0000_1234_5000;
+    const entry: RawEntry = .{
+        .present = true,
+        .phys_addr = @truncate(addr >> PAGE_SHIFT),
+    };
+    try testing.expectEqual(addr, entry.getPhysAddr());
+}
+
+test "PML4E table/getPDPT roundtrip" {
+    const pdpt_phys = Phys.from(0x0010_0000);
+    const entry = PML4E.table(pdpt_phys, .{});
+    try testing.expect(entry.isPresent());
+    const got = entry.getPDPT() orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(pdpt_phys.raw(), got.raw());
+}
+
+test "PML4E empty is not present" {
+    const entry = PML4E.empty();
+    try testing.expect(!entry.isPresent());
+    try testing.expectEqual(@as(?Phys, null), entry.getPDPT());
+}
+
+test "PDPTE table/getPD roundtrip" {
+    const pd_phys = Phys.from(0x0020_0000);
+    const entry = PDPTE.table(pd_phys, .{});
+    try testing.expect(entry.isPresent());
+    try testing.expect(!entry.isHugePage());
+    const got = entry.getPD() orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(pd_phys.raw(), got.raw());
+}
+
+test "PDPTE hugePage sets huge flag and address" {
+    const phys = Phys.from(0x4000_0000); // 1GB aligned
+    const entry = PDPTE.hugePage(phys, .{});
+    try testing.expect(entry.isPresent());
+    try testing.expect(entry.isHugePage());
+    try testing.expectEqual(@as(?Phys, null), entry.getPD());
+    try testing.expectEqual(phys.raw(), entry.raw.getPhysAddr());
+}
+
+test "PDE table/getPT roundtrip" {
+    const pt_phys = Phys.from(0x0030_0000);
+    const entry = PDE.table(pt_phys, .{});
+    try testing.expect(entry.isPresent());
+    try testing.expect(!entry.isLargePage());
+    const got = entry.getPT() orelse return error.TestUnexpectedResult;
+    try testing.expectEqual(pt_phys.raw(), got.raw());
+}
+
+test "PDE largePage sets huge flag and address" {
+    const phys = Phys.from(0x0020_0000); // 2MB aligned
+    const entry = PDE.largePage(phys, .{});
+    try testing.expect(entry.isPresent());
+    try testing.expect(entry.isLargePage());
+    try testing.expectEqual(@as(?Phys, null), entry.getPT());
+    try testing.expectEqual(phys.raw(), entry.raw.getPhysAddr());
+}
+
+test "PTE page/getPhys roundtrip" {
+    const phys = Phys.from(0x0040_0000);
+    const entry = PTE.page(phys, .{});
+    try testing.expect(entry.isPresent());
+    try testing.expectEqual(phys.raw(), entry.getPhys().raw());
+}
+
+test "PTE empty is not present" {
+    const entry = PTE.empty();
+    try testing.expect(!entry.isPresent());
+}
+
+test "flag propagation: writable, user, no_execute" {
+    const flags: Flags = .{
+        .writable = true,
+        .user = true,
+        .no_execute = true,
+    };
+    const pte = PTE.page(Phys.from(0x1000), flags);
+    try testing.expect(pte.raw.writable);
+    try testing.expect(pte.raw.user);
+    try testing.expect(pte.raw.no_execute);
+}

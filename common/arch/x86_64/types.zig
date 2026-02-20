@@ -73,3 +73,44 @@ pub const Virt = extern struct {
         return @truncate(self.value & 0xFFF);
     }
 };
+
+const testing = @import("std").testing;
+
+test "Virt paging indices for address zero" {
+    const v = Virt.from(0);
+    try testing.expectEqual(@as(u9, 0), v.pml4Index());
+    try testing.expectEqual(@as(u9, 0), v.pdptIndex());
+    try testing.expectEqual(@as(u9, 0), v.pdIndex());
+    try testing.expectEqual(@as(u9, 0), v.ptIndex());
+    try testing.expectEqual(@as(u12, 0), v.pageOffset());
+}
+
+test "Virt paging indices for known address" {
+    // Construct: pml4=1, pdpt=2, pd=3, pt=4, offset=0x567
+    const addr = (@as(u64, 1) << 39) |
+        (@as(u64, 2) << 30) |
+        (@as(u64, 3) << 21) |
+        (@as(u64, 4) << 12) |
+        0x567;
+    const v = Virt.from(addr);
+    try testing.expectEqual(@as(u9, 1), v.pml4Index());
+    try testing.expectEqual(@as(u9, 2), v.pdptIndex());
+    try testing.expectEqual(@as(u9, 3), v.pdIndex());
+    try testing.expectEqual(@as(u9, 4), v.ptIndex());
+    try testing.expectEqual(@as(u12, 0x567), v.pageOffset());
+}
+
+test "Virt paging indices at max values" {
+    // All index fields set to 0x1FF (511), offset 0xFFF
+    const addr = (@as(u64, 0x1FF) << 39) |
+        (@as(u64, 0x1FF) << 30) |
+        (@as(u64, 0x1FF) << 21) |
+        (@as(u64, 0x1FF) << 12) |
+        0xFFF;
+    const v = Virt.from(addr);
+    try testing.expectEqual(@as(u9, 0x1FF), v.pml4Index());
+    try testing.expectEqual(@as(u9, 0x1FF), v.pdptIndex());
+    try testing.expectEqual(@as(u9, 0x1FF), v.pdIndex());
+    try testing.expectEqual(@as(u9, 0x1FF), v.ptIndex());
+    try testing.expectEqual(@as(u12, 0xFFF), v.pageOffset());
+}

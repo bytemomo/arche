@@ -76,3 +76,40 @@ pub const BootInfo = extern struct {
         return Size.from(self.kernel_phys_end.raw() - self.kernel_phys_start.raw());
     }
 };
+
+const testing = @import("std").testing;
+
+test "BootInfo validate with correct magic" {
+    var info: BootInfo = undefined;
+    info.magic = BOOT_INFO_MAGIC;
+    try testing.expect(info.validate());
+}
+
+test "BootInfo validate with wrong magic" {
+    var info: BootInfo = undefined;
+    info.magic = 0;
+    try testing.expect(!info.validate());
+}
+
+test "BootInfo kernelSize" {
+    var info: BootInfo = undefined;
+    info.kernel_phys_start = Phys.from(0x10_0000);
+    info.kernel_phys_end = Phys.from(0x20_0000);
+    try testing.expectEqual(
+        @as(u64, 0x10_0000),
+        info.kernelSize().raw(),
+    );
+}
+
+test "MemoryRegion size and physEnd" {
+    const region = MemoryRegion{
+        .phys_start = Phys.from(0x1000),
+        .page_count = PageCount.from(4),
+        .mem_type = .usable,
+    };
+    try testing.expectEqual(@as(u64, 4 * 4096), region.size().raw());
+    try testing.expectEqual(
+        @as(u64, 0x1000 + 4 * 4096),
+        region.physEnd().raw(),
+    );
+}

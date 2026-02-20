@@ -67,3 +67,42 @@ pub fn isPhysMapAddr(virt: Virt) bool {
     const v = virt.raw();
     return v >= PHYS_MAP_BASE.raw() and v < PHYS_MAP_BASE.raw() + PHYS_MAP_SIZE.raw();
 }
+
+const testing = @import("std").testing;
+
+test "physToVirt/virtToPhys invertibility" {
+    const phys = Phys.from(0x1000);
+    const virt = physToVirt(phys);
+    const back = virtToPhys(virt) orelse
+        return error.TestUnexpectedResult;
+    try testing.expectEqual(phys.raw(), back.raw());
+}
+
+test "virtToPhys returns null outside phys map" {
+    try testing.expectEqual(
+        @as(?Phys, null),
+        virtToPhys(Virt.from(0)),
+    );
+    try testing.expectEqual(
+        @as(?Phys, null),
+        virtToPhys(KERNEL_BASE),
+    );
+}
+
+test "isKernelAddr" {
+    try testing.expect(isKernelAddr(KERNEL_BASE));
+    try testing.expect(isKernelAddr(Virt.from(0xFFFF_FFFF_FFFF_FFFF)));
+    try testing.expect(!isKernelAddr(Virt.from(0)));
+    try testing.expect(!isKernelAddr(PHYS_MAP_BASE));
+}
+
+test "isPhysMapAddr" {
+    try testing.expect(isPhysMapAddr(PHYS_MAP_BASE));
+    try testing.expect(isPhysMapAddr(
+        Virt.from(PHYS_MAP_BASE.raw() + PHYS_MAP_SIZE.raw() - 1),
+    ));
+    try testing.expect(!isPhysMapAddr(
+        Virt.from(PHYS_MAP_BASE.raw() + PHYS_MAP_SIZE.raw()),
+    ));
+    try testing.expect(!isPhysMapAddr(Virt.from(0)));
+}

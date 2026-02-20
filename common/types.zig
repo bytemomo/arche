@@ -198,3 +198,85 @@ pub const BitsPerPixel = extern struct {
         return (self.value + 7) / 8;
     }
 };
+
+const testing = @import("std").testing;
+
+test "Phys from/raw roundtrip" {
+    const addr = Phys.from(0xDEAD_BEEF);
+    try testing.expectEqual(@as(u64, 0xDEAD_BEEF), addr.raw());
+}
+
+test "Phys add/sub" {
+    const base = Phys.from(0x1000);
+    try testing.expectEqual(@as(u64, 0x1100), base.add(0x100).raw());
+    try testing.expectEqual(@as(u64, 0x0F00), base.sub(0x100).raw());
+}
+
+test "Phys alignDown/alignUp/isAligned" {
+    const addr = Phys.from(0x1234);
+    try testing.expectEqual(@as(u64, 0x1000), addr.alignDown(0x1000).raw());
+    try testing.expectEqual(@as(u64, 0x2000), addr.alignUp(0x1000).raw());
+    try testing.expect(!addr.isAligned(0x1000));
+    try testing.expect(Phys.from(0x1000).isAligned(0x1000));
+}
+
+test "Virt from/raw roundtrip" {
+    const addr = Virt.from(0xCAFE_BABE);
+    try testing.expectEqual(@as(u64, 0xCAFE_BABE), addr.raw());
+}
+
+test "Virt add/sub" {
+    const base = Virt.from(0x2000);
+    try testing.expectEqual(@as(u64, 0x2200), base.add(0x200).raw());
+    try testing.expectEqual(@as(u64, 0x1E00), base.sub(0x200).raw());
+}
+
+test "Virt alignDown/alignUp/isAligned" {
+    const addr = Virt.from(0x3456);
+    try testing.expectEqual(@as(u64, 0x3000), addr.alignDown(0x1000).raw());
+    try testing.expectEqual(@as(u64, 0x4000), addr.alignUp(0x1000).raw());
+    try testing.expect(!addr.isAligned(0x1000));
+    try testing.expect(Virt.from(0x4000).isAligned(0x1000));
+}
+
+test "Size from/raw and unit constructors" {
+    try testing.expectEqual(@as(u64, 42), Size.from(42).raw());
+    try testing.expectEqual(@as(u64, 1024), Size.kib(1).raw());
+    try testing.expectEqual(@as(u64, 1024 * 1024), Size.mib(1).raw());
+    try testing.expectEqual(@as(u64, 1024 * 1024 * 1024), Size.gib(1).raw());
+    try testing.expectEqual(@as(u64, 1024 * 1024 * 1024 * 1024), Size.tib(1).raw());
+}
+
+test "Size toPageCount" {
+    try testing.expectEqual(@as(u64, 1), Size.from(4096).toPageCount().raw());
+    try testing.expectEqual(@as(u64, 1), Size.from(1).toPageCount().raw());
+    try testing.expectEqual(@as(u64, 2), Size.from(4097).toPageCount().raw());
+    try testing.expectEqual(@as(u64, 0), Size.from(0).toPageCount().raw());
+}
+
+test "Size alignUp/alignDown" {
+    const s = Size.from(5000);
+    try testing.expectEqual(@as(u64, 8192), s.alignUp(4096).raw());
+    try testing.expectEqual(@as(u64, 4096), s.alignDown(4096).raw());
+}
+
+test "PageCount from/raw and toBytes" {
+    const pc = PageCount.from(3);
+    try testing.expectEqual(@as(u64, 3), pc.raw());
+    try testing.expectEqual(@as(u64, 3 * 4096), pc.toBytes().raw());
+}
+
+test "PageCount add/sub" {
+    const a = PageCount.from(5);
+    const b = PageCount.from(2);
+    try testing.expectEqual(@as(u64, 7), a.add(b).raw());
+    try testing.expectEqual(@as(u64, 3), a.sub(b).raw());
+}
+
+test "BitsPerPixel bytesPerPixel" {
+    try testing.expectEqual(@as(u16, 3), BitsPerPixel.from(24).bytesPerPixel());
+    try testing.expectEqual(@as(u16, 4), BitsPerPixel.from(32).bytesPerPixel());
+    try testing.expectEqual(@as(u16, 1), BitsPerPixel.from(8).bytesPerPixel());
+    try testing.expectEqual(@as(u16, 2), BitsPerPixel.from(16).bytesPerPixel());
+    try testing.expectEqual(@as(u16, 2), BitsPerPixel.from(15).bytesPerPixel());
+}
