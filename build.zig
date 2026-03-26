@@ -202,15 +202,31 @@ fn createSimHal(b: *std.Build) *std.Build.Module {
 }
 
 fn addSimImports(root: *std.Build.Module, sim_hal: *std.Build.Module, options: *std.Build.Step.Options) void {
+    const b = root.owner;
     root.addOptions("option", options);
     root.addImport("hal", sim_hal);
-    // core is available to main.zig via hal's dependency
     root.addImport("core", sim_hal.import_table.get("core").?);
-    const sim_writer = root.owner.createModule(.{
-        .root_source_file = root.owner.path("kyber/arch/x86_64/serial.zig"),
+
+    const sim_types = createTypesModule(b);
+    const sim_boot_info = createBootInfoModule(b, sim_types);
+    const sim_writer = b.createModule(.{
+        .root_source_file = b.path("kyber/arch/x86_64/serial.zig"),
     });
     sim_writer.addImport("hal", sim_hal);
-    root.addImport("log", createLogModule(root.owner, sim_writer));
+    const sim_log = createLogModule(b, sim_writer);
+    root.addImport("log", sim_log);
+    root.addImport("types", sim_types);
+    root.addImport("boot_info", sim_boot_info);
+
+    const sim_kernel = b.createModule(.{
+        .root_source_file = b.path("kyber/entry.zig"),
+    });
+    sim_kernel.addOptions("option", options);
+    sim_kernel.addImport("hal", sim_hal);
+    sim_kernel.addImport("log", sim_log);
+    sim_kernel.addImport("types", sim_types);
+    sim_kernel.addImport("boot_info", sim_boot_info);
+    root.addImport("kernel", sim_kernel);
 }
 
 fn setupTests(b: *std.Build, _: *std.Build.Step.Options) void {

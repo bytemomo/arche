@@ -2,32 +2,52 @@ const std = @import("std");
 const builtin = @import("builtin");
 const core = @import("core");
 const hal = @import("hal");
-const log = @import("log");
+const kernel = @import("kernel");
+const boot_info = @import("boot_info");
+const types = @import("types");
+
+const Phys = types.Phys;
+const Virt = types.Virt;
+const PageCount = types.PageCount;
 
 const is_wasm = builtin.cpu.arch == .wasm32;
 
-// --- Shared simulation state ---
-
 var sim: core.Simulation = undefined;
-var initialized: bool = false;
 
-// --- Tick-based API (exported for wasm host / host runner) ---
+var regions = [_]boot_info.MemoryRegion{.{
+    .phys_start = Phys.from(0),
+    .page_count = PageCount.from(65536),
+    .mem_type = .usable,
+}};
+
+var info = boot_info.BootInfo{
+    .entry_phys = Phys.from(0x20_0000),
+    .entry_virt = Virt.from(0xFFFF_C000_0020_0000),
+    .kernel_phys_start = Phys.from(0x20_0000),
+    .kernel_phys_end = Phys.from(0x40_0000),
+    .cr3 = Phys.from(0x1000),
+    .memory_map = .{
+        .entries = &regions,
+        .entry_count = 1,
+    },
+    .framebuffer = null,
+    .rsdp_phys = Phys.from(0),
+};
+
+// --- Tick-based API -------------------------------------------------
 
 export fn sim_init(seed: u64) void {
     sim = core.Simulation.init(seed);
     hal.port_io.init(&sim);
-    log.init() catch {};
-    initialized = true;
+    kernel.init(&info);
 }
 
 export fn sim_step() u64 {
-    if (!initialized) return 0;
     sim.step();
     return sim.cycle;
 }
 
 export fn sim_event_count() u32 {
-    if (!initialized) return 0;
     return @intCast(sim.events.len);
 }
 
@@ -40,12 +60,11 @@ export fn sim_log_len() u32 {
 }
 
 export fn sim_reset() void {
-    if (!initialized) return;
     sim.reset();
     hal.port_io.init(&sim);
 }
 
-// --- Host-native main (not used in wasm) ---
+// --- Host-native main -----------------------------------------------
 
 pub fn main() !void {
     if (is_wasm) return;
@@ -57,6 +76,11 @@ pub fn main() !void {
         for (0..10) |_| {
             _ = sim_step();
         }
+    }
+
+    const serial_log = hal.port_io.getSerialLog();
+    if (serial_log.len > 0) {
+        std.fs.File.stdout().writeAll(serial_log) catch {};
     }
 
     var buf: [64]u8 = undefined;

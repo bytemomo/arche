@@ -24,10 +24,10 @@ pub fn loadCs(comptime sel: u16) void {
     cs = sel;
 }
 
-pub fn halt() noreturn {
-    @panic("halt called in simulation");
-}
-
 pub fn loadDs(comptime sel: u16) void {
     ds = sel;
+}
+
+pub fn halt() noreturn {
+    while (true) {}
 }
