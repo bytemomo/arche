@@ -1,4 +1,5 @@
 const std = @import("std");
+const cpu = @import("hal").cpu;
 
 pub const Selector = packed struct(u16) {
     rpl: u2,
@@ -214,11 +215,6 @@ comptime {
 
 // -- Runtime State ---------------------------------------------------
 
-const Gdtr = packed struct(u80) {
-    limit: u16,
-    base: u64,
-};
-
 var tss: Tss = .{};
 var table align(16) = buildTable();
 
@@ -232,55 +228,14 @@ fn loadTss() void {
     table[tss_idx] = @bitCast(@as(u64, @truncate(desc)));
     table[tss_idx + 1] = @bitCast(@as(u64, @truncate(desc >> 64)));
 
-    asm volatile (
-        \\ltr %[tss_sel]
-        :
-        : [tss_sel] "r" (@as(u16, @bitCast(TSS_SEL))),
-    );
-}
-
-fn loadCs() void {
-    // CS cannot be set with mov, far-return frame
-    // (CS:RIP) on the stack and lretq into it.
-    asm volatile (
-        \\pushq %[kernel_cs]
-        \\leaq 1f(%%rip), %%rax
-        \\pushq %%rax
-        \\lretq
-        \\1:
-        :
-        : [kernel_cs] "i" (@as(u64, @as(u16, @bitCast(KERNEL_CS)))),
-        : .{ .rax = true, .memory = true });
-}
-
-fn loadDs() void {
-    asm volatile (
-        \\movw %[kernel_ds], %%ax
-        \\movw %%ax, %%ds
-        \\movw %%ax, %%es
-        \\movw %%ax, %%ss
-        \\xorw %%ax, %%ax
-        \\movw %%ax, %%fs
-        \\movw %%ax, %%gs
-        :
-        : [kernel_ds] "i" (@as(u16, @bitCast(KERNEL_DS))),
-        : .{ .rax = true });
+    cpu.ltr(@bitCast(TSS_SEL));
 }
 
 // -- Init ------------------------------------------------------------
 
 pub fn init() void {
-    const gdtr: Gdtr = .{
-        .limit = @sizeOf(@TypeOf(table)) - 1,
-        .base = @intFromPtr(&table),
-    };
-
-    asm volatile ("lgdt (%[gdtr])"
-        :
-        : [gdtr] "r" (&gdtr),
-        : .{ .memory = true });
-
-    loadCs();
-    loadDs();
+    cpu.lgdt(@intFromPtr(&table), @sizeOf(@TypeOf(table)) - 1);
+    cpu.loadCs(@bitCast(KERNEL_CS));
+    cpu.loadDs(@bitCast(KERNEL_DS));
     loadTss();
 }

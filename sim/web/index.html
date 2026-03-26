@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>arche — DST simulation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      background: #0a0a0a;
+      color: #c0c0c0;
+      padding: 1rem;
+    }
+    h1 { font-size: 1.2rem; margin-bottom: 1rem; color: #e0e0e0; }
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    label { font-size: 0.85rem; }
+    input[type="number"] {
+      width: 8ch;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border: 1px solid #333;
+      padding: 0.25rem 0.4rem;
+      font-family: monospace;
+    }
+    button {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border: 1px solid #333;
+      padding: 0.25rem 0.75rem;
+      font-family: monospace;
+      cursor: pointer;
+    }
+    button:hover { background: #2a2a2a; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    .stats {
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      color: #888;
+    }
+    .stats span { color: #e0e0e0; }
+    #log {
+      background: #0e0e0e;
+      border: 1px solid #222;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 60vh;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <h1>arche DST</h1>
+  <div class="controls">
+    <label>seed</label>
+    <input type="number" id="seed" value="0" min="0">
+    <button id="btn-init">init</button>
+    <button id="btn-step" disabled>step</button>
+    <button id="btn-run" disabled>run 10</button>
+    <button id="btn-reset" disabled>reset</button>
+  </div>
+  <div class="stats">
+    cycle: <span id="cycle">—</span>
+    &nbsp; events: <span id="events">—</span>
+  </div>
+  <div id="log"></div>
+  <script src="index.js"></script>
+</body>
+</html>

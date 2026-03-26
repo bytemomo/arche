@@ -1,4 +1,5 @@
 const std = @import("std");
+const port_io = @import("hal").port_io;
 
 pub const init = Serial.init;
 pub const writer = Serial.writer;
@@ -7,13 +8,13 @@ const Serial = struct {
     const COM1: u16 = 0x3F8;
 
     pub fn init() !void {
-        outb(COM1 + 1, 0x00); // Disable interrupts
-        outb(COM1 + 3, 0x80); // Enable DLAB (set baud rate divisor)
-        outb(COM1 + 0, 0x03); // Divisor low byte (38400 baud)
-        outb(COM1 + 1, 0x00); // Divisor high byte
-        outb(COM1 + 3, 0x03); // 8 bits, no parity, one stop bit
-        outb(COM1 + 2, 0xC7); // Enable FIFO, clear, 14-byte threshold
-        outb(COM1 + 4, 0x0B); // IRQs enabled, RTS/DSR set
+        port_io.outb(COM1 + 1, 0x00); // Disable interrupts
+        port_io.outb(COM1 + 3, 0x80); // Enable DLAB (set baud rate divisor)
+        port_io.outb(COM1 + 0, 0x03); // Divisor low byte (38400 baud)
+        port_io.outb(COM1 + 1, 0x00); // Divisor high byte
+        port_io.outb(COM1 + 3, 0x03); // 8 bits, no parity, one stop bit
+        port_io.outb(COM1 + 2, 0xC7); // Enable FIFO, clear, 14-byte threshold
+        port_io.outb(COM1 + 4, 0x0B); // IRQs enabled, RTS/DSR set
     }
 
     pub fn writer() !Writer {
@@ -53,27 +54,12 @@ const Serial = struct {
         fn writeBytes(bytes: []const u8) void {
             for (bytes) |b| {
                 waitTxEmpty();
-                outb(COM1, b);
+                port_io.outb(COM1, b);
             }
         }
     };
 
     fn waitTxEmpty() void {
-        while ((inb(COM1 + 5) & 0x20) == 0) {}
-    }
-
-    fn outb(port: u16, value: u8) void {
-        asm volatile ("outb %[value], %[port]"
-            :
-            : [value] "{al}" (value),
-              [port] "N{dx}" (port),
-        );
-    }
-
-    fn inb(port: u16) u8 {
-        return asm volatile ("inb %[port], %[result]"
-            : [result] "={al}" (-> u8),
-            : [port] "N{dx}" (port),
-        );
+        while ((port_io.inb(COM1 + 5) & 0x20) == 0) {}
     }
 };

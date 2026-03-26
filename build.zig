@@ -43,7 +43,6 @@ pub fn build(b: *std.Build) void {
     run_qemu_cmd.dependOn(&qemu_cmd.step);
 }
 
-
 fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     const s_log_level = b.option([]const u8, "log_level", "log_level") orelse "Info";
 
@@ -58,8 +57,8 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
         else if (eql(u8, s_log_level, "Error"))
             .err
 
-        // This are usefull when we want to have a certain log level
-        // with certain build types
+            // This are usefull when we want to have a certain log level
+            // with certain build types
         else if (eql(u8, s_log_level, "ReleaseFast"))
             .warn
         else if (eql(u8, s_log_level, "Release"))
@@ -136,61 +135,24 @@ fn setupKyber(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
     kyber.root_module.addImport("types", kyber_types);
     kyber.root_module.addImport("arch", createArchModule(b, cpu_arch, kyber_types));
     kyber.root_module.addImport("boot_info", createBootInfoModule(b, kyber_types));
-    kyber.root_module.addImport("log", createLogModule(b, createWriterModule(b, b.path("kyber/arch/x86_64/serial.zig"))));
+    const kyber_hal = b.createModule(.{
+        .root_source_file = b.path("kyber/arch/x86_64/hal/hal.zig"),
+    });
+    kyber_hal.addImport("types", kyber_types);
+    kyber.root_module.addImport("hal", kyber_hal);
+    const kyber_writer = createWriterModule(b, b.path("kyber/arch/x86_64/serial.zig"));
+    kyber_writer.addImport("hal", kyber_hal);
+    kyber.root_module.addImport("log", createLogModule(b, kyber_writer));
     b.installArtifact(kyber);
 
     const install_kyber = b.addInstallFile(
         kyber.getEmittedBin(),
-        b.fmt("{s}/{s}", .{out_dir_name, kyber.name}),
+        b.fmt("{s}/{s}", .{ out_dir_name, kyber.name }),
     );
     install_kyber.step.dependOn(&kyber.step);
     b.getInstallStep().dependOn(&install_kyber.step);
 
     return kyber;
-}
-
-fn setupTests(b: *std.Build, options: *std.Build.Step.Options) void {
-    const test_step = b.step("test", "Run unit tests");
-    const types_mod = createTypesModule(b);
-
-    // Common module tests
-    const common_paths = [_][]const u8{
-        "common/types.zig",
-        "common/arch/x86_64/types.zig",
-        "common/arch/x86_64/paging.zig",
-        "common/arch/x86_64/layout.zig",
-        "common/boot_info.zig",
-    };
-
-    for (common_paths) |path| {
-        const mod = b.createModule(.{
-            .root_source_file = b.path(path),
-            .target = b.graph.host,
-        });
-        mod.addImport("types", types_mod);
-        const t = b.addTest(.{ .root_module = mod });
-        test_step.dependOn(&b.addRunArtifact(t).step);
-    }
-
-    // Simulation module tests
-    const sim_mods = createSimModules(b);
-    const sim_paths = [_][]const u8{
-        "sim/core.zig",
-        "sim/fake_port_io.zig",
-        "sim/fake_memory.zig",
-        "sim/tests/paging_fuzz.zig",
-        "sim/tests/boot_fuzz.zig",
-    };
-
-    for (sim_paths) |path| {
-        const mod = b.createModule(.{
-            .root_source_file = b.path(path),
-            .target = b.graph.host,
-        });
-        addSimImports(mod, sim_mods, options);
-        const t = b.addTest(.{ .root_module = mod });
-        test_step.dependOn(&b.addRunArtifact(t).step);
-    }
 }
 
 fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
@@ -228,63 +190,65 @@ fn setupLogos(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bui
 
 // --- Simulation (DST) targets ---
 
-fn createSimModules(b: *std.Build) struct {
-    types: *std.Build.Module,
-    arch: *std.Build.Module,
-    boot_info: *std.Build.Module,
-    log: *std.Build.Module,
-    core: *std.Build.Module,
-    fake_port_io: *std.Build.Module,
-    fake_memory: *std.Build.Module,
-    writer: *std.Build.Module,
-} {
-    const sim_types = createTypesModule(b);
-    const sim_arch = createArchModule(b, cpu_arch, sim_types);
-    const sim_boot_info = createBootInfoModule(b, sim_types);
-    const sim_writer = createWriterModule(b, b.path("sim/writer.zig"));
-    const sim_log = createLogModule(b, sim_writer);
-
+fn createSimHal(b: *std.Build) *std.Build.Module {
     const sim_core = b.createModule(.{
         .root_source_file = b.path("sim/core.zig"),
     });
-
-    const sim_fake_port_io = b.createModule(.{
-        .root_source_file = b.path("sim/fake_port_io.zig"),
+    const sim_hal = b.createModule(.{
+        .root_source_file = b.path("sim/hal/hal.zig"),
     });
-    sim_fake_port_io.addImport("core", sim_core);
-
-    const sim_fake_memory = b.createModule(.{
-        .root_source_file = b.path("sim/fake_memory.zig"),
-    });
-    sim_fake_memory.addImport("core", sim_core);
-    sim_fake_memory.addImport("types", sim_types);
-
-    return .{
-        .types = sim_types,
-        .arch = sim_arch,
-        .boot_info = sim_boot_info,
-        .log = sim_log,
-        .core = sim_core,
-        .fake_port_io = sim_fake_port_io,
-        .fake_memory = sim_fake_memory,
-        .writer = sim_writer,
-    };
+    sim_hal.addImport("core", sim_core);
+    return sim_hal;
 }
 
-fn addSimImports(root: *std.Build.Module, mods: anytype, options: *std.Build.Step.Options) void {
+fn addSimImports(root: *std.Build.Module, sim_hal: *std.Build.Module, options: *std.Build.Step.Options) void {
     root.addOptions("option", options);
-    root.addImport("types", mods.types);
-    root.addImport("arch", mods.arch);
-    root.addImport("boot_info", mods.boot_info);
-    root.addImport("log", mods.log);
-    root.addImport("core", mods.core);
-    root.addImport("fake_port_io", mods.fake_port_io);
-    root.addImport("fake_memory", mods.fake_memory);
-    root.addImport("writer", mods.writer);
+    root.addImport("hal", sim_hal);
+    // core is available to main.zig via hal's dependency
+    root.addImport("core", sim_hal.import_table.get("core").?);
+    const sim_writer = root.owner.createModule(.{
+        .root_source_file = root.owner.path("kyber/arch/x86_64/serial.zig"),
+    });
+    sim_writer.addImport("hal", sim_hal);
+    root.addImport("log", createLogModule(root.owner, sim_writer));
+}
+
+fn setupTests(b: *std.Build, _: *std.Build.Step.Options) void {
+    const test_step = b.step("test", "Run unit tests");
+    const types_mod = createTypesModule(b);
+
+    // Common module tests
+    const common_paths = [_][]const u8{
+        "common/types.zig",
+        "common/arch/x86_64/types.zig",
+        "common/arch/x86_64/paging.zig",
+        "common/arch/x86_64/layout.zig",
+        "common/boot_info.zig",
+    };
+
+    for (common_paths) |path| {
+        const mod = b.createModule(.{
+            .root_source_file = b.path(path),
+            .target = b.graph.host,
+        });
+        mod.addImport("types", types_mod);
+        const t = b.addTest(.{ .root_module = mod });
+        test_step.dependOn(&b.addRunArtifact(t).step);
+    }
+
+    // Simulation HAL tests
+    const sim_hal = createSimHal(b);
+    const hal_test = b.createModule(.{
+        .root_source_file = b.path("sim/hal/hal.zig"),
+        .target = b.graph.host,
+    });
+    hal_test.addImport("core", sim_hal.import_table.get("core").?);
+    const t = b.addTest(.{ .root_module = hal_test });
+    test_step.dependOn(&b.addRunArtifact(t).step);
 }
 
 fn setupSimHeadless(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) void {
-    const sim_mods = createSimModules(b);
+    const sim_hal = createSimHal(b);
 
     const sim_exe = b.addExecutable(.{
         .name = "arche-sim",
@@ -294,7 +258,7 @@ fn setupSimHeadless(b: *std.Build, options: *std.Build.Step.Options, optimize: s
             .optimize = optimize,
         }),
     });
-    addSimImports(sim_exe.root_module, sim_mods, options);
+    addSimImports(sim_exe.root_module, sim_hal, options);
 
     const install_sim = b.addInstallArtifact(sim_exe, .{
         .dest_dir = .{ .override = .{ .custom = "sim" } },
@@ -308,7 +272,7 @@ fn setupSimHeadless(b: *std.Build, options: *std.Build.Step.Options, optimize: s
 }
 
 fn setupSimWeb(b: *std.Build, options: *std.Build.Step.Options, optimize: std.builtin.OptimizeMode) void {
-    const mods = createSimModules(b);
+    const sim_hal = createSimHal(b);
     const web_dir = "sim/web";
 
     const sim_wasm = b.addExecutable(.{
@@ -325,16 +289,14 @@ fn setupSimWeb(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bu
     sim_wasm.entry = .disabled;
     sim_wasm.rdynamic = true;
     sim_wasm.stack_size = 4 * 1024 * 1024; // 4 MiB stack for large static structs
-    addSimImports(sim_wasm.root_module, mods, options);
+    addSimImports(sim_wasm.root_module, sim_hal, options);
 
-    // Install wasm binary into web dir
     const install_wasm = b.addInstallFile(
         sim_wasm.getEmittedBin(),
         b.fmt("{s}/arche-sim.wasm", .{web_dir}),
     );
     install_wasm.step.dependOn(&sim_wasm.step);
 
-    // Install static web files
     const install_html = b.addInstallFile(
         b.path("sim/web/index.html"),
         b.fmt("{s}/index.html", .{web_dir}),
@@ -344,9 +306,8 @@ fn setupSimWeb(b: *std.Build, options: *std.Build.Step.Options, optimize: std.bu
         b.fmt("{s}/index.js", .{web_dir}),
     );
 
-    // Start web server serving the output directory
     const serve = b.addSystemCommand(&.{
-        "python3", "-m", "http.server", "8080", "--directory",
+        "python3",                                      "-m", "http.server", "8080", "--directory",
         b.fmt("{s}/{s}", .{ b.install_path, web_dir }),
     });
     serve.step.dependOn(&install_wasm.step);

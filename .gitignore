@@ -20,3 +20,9 @@
 !/kyber/**/
 !/kyber/**/*.zig
 !/kyber/linker.ld
+
+!/sim
+!/sim/**/
+!/sim/**/*.zig
+!/sim/web/index.js
+!/sim/web/index.html

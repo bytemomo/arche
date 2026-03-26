@@ -30,5 +30,14 @@ debug:
 debug-kill:
     tmux kill-session -t arche-debug 2>/dev/null || true
 
+test:
+    zig build test --summary all
+
+sim:
+    zig build sim-headless
+
+sim-web:
+    zig build sim-web
+
 clean:
     rm -rf zig-out .zig-cache
