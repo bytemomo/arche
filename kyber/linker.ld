@@ -29,6 +29,7 @@ SECTIONS
     {
         __rodata_start = .;
         *(.rodata .rodata.*)
+        *(.lrodata .lrodata.*)
         __rodata_end = .;
     }
 
@@ -36,6 +37,9 @@ SECTIONS
     {
         __data_start = .;
         *(.data .data.*)
+        *(.ldata .ldata.*)
+        *(.ldata.rel.ro .ldata.rel.ro.*)
+        *(.got .got.plt)
         __data_end = .;
     }
 
@@ -43,6 +47,7 @@ SECTIONS
     {
         __bss_start = .;
         *(.bss .bss.*)
+        *(.lbss .lbss.*)
         *(COMMON)
         __bss_end = .;
     }

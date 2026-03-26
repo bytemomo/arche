@@ -30,6 +30,25 @@ pub fn loadCs(comptime sel: u16) void {
         : .{ .rax = true, .memory = true });
 }
 
+pub fn lidt(base: u64, limit: u16) void {
+    const idtr: packed struct(u80) {
+        limit: u16,
+        base: u64,
+    } = .{ .limit = limit, .base = base };
+
+    asm volatile ("lidt (%[idtr])"
+        :
+        : [idtr] "r" (&idtr),
+        : .{ .memory = true });
+}
+
+pub fn halt() noreturn {
+    asm volatile ("cli");
+    while (true) {
+        asm volatile ("hlt");
+    }
+}
+
 pub fn loadDs(comptime sel: u16) void {
     asm volatile (
         \\movw %[ds], %%ax

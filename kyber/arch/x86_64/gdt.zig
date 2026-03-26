@@ -139,7 +139,7 @@ const Slot = enum {
     tss,
 };
 
-const layout = .{
+const LAYOUT = .{
     .{ Slot.nil, 0, null },
     .{ Slot.kernel_code, 0, Descriptor{
         .access = .{ .rw = true, .executable = true, .dpl = 0 },
@@ -161,8 +161,10 @@ const layout = .{
     .{ Slot.nil, 0, null },
 };
 
+const TABLE_LEN = LAYOUT.len;
+
 fn slotSelector(comptime slot: Slot) Selector {
-    for (layout, 0..) |row, i| {
+    for (LAYOUT, 0..) |row, i| {
         if (row[0] == slot) {
             return .{ .rpl = row[1], .index = @intCast(i) };
         }
@@ -171,17 +173,15 @@ fn slotSelector(comptime slot: Slot) Selector {
 }
 
 fn slotIndex(comptime slot: Slot) comptime_int {
-    for (layout, 0..) |row, i| {
+    for (LAYOUT, 0..) |row, i| {
         if (row[0] == slot) return i;
     }
     @compileError("slot not found in layout");
 }
 
-const table_len = layout.len;
-
-fn buildTable() [table_len]Entry {
-    var entries: [table_len]Entry = undefined;
-    for (layout, 0..) |row, i| {
+fn buildTable() [TABLE_LEN]Entry {
+    var entries: [TABLE_LEN]Entry = undefined;
+    for (LAYOUT, 0..) |row, i| {
         entries[i] = if (@TypeOf(row[2]) == Descriptor)
             row[2].toEntry()
         else
@@ -197,7 +197,7 @@ pub const USER_DS: Selector = slotSelector(.user_data);
 pub const TSS_SEL: Selector = slotSelector(.tss);
 
 comptime {
-    for (layout) |row| {
+    for (LAYOUT) |row| {
         if (@TypeOf(row[2]) == Descriptor) {
             if (row[1] != row[2].access.dpl) {
                 @compileError(
@@ -208,7 +208,7 @@ comptime {
     }
     // TSS must have room for 2 slots.
     const tss_idx = slotIndex(.tss);
-    if (tss_idx + 1 >= table_len) {
+    if (tss_idx + 1 >= TABLE_LEN) {
         @compileError("TSS needs two consecutive GDT slots");
     }
 }

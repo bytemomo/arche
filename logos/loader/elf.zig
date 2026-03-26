@@ -28,7 +28,7 @@ pub fn load(services: Services, file_data: []const u8) LoadError!LoadedKernel {
     if (file_data.len < @sizeOf(elf.Elf64_Ehdr)) return error.InvalidMagic;
     if (!std.mem.eql(u8, file_data[0..4], elf.MAGIC)) return error.InvalidMagic;
 
-    const raw_hdr: *const elf.Elf64_Ehdr = @ptrCast(@alignCast(file_data.ptr));
+    const raw_hdr = std.mem.bytesAsValue(elf.Elf64_Ehdr, file_data[0..@sizeOf(elf.Elf64_Ehdr)]);
 
     if (file_data[elf.EI_CLASS] != elf.ELFCLASS64) return error.Not64Bit;
     if (raw_hdr.e_type != .EXEC) return error.NotExecutable;
@@ -51,7 +51,7 @@ pub fn load(services: Services, file_data: []const u8) LoadError!LoadedKernel {
         const phdr_offset = phoff + @as(u64, i) * @as(u64, phentsize);
         if (phdr_offset + @sizeOf(elf.Elf64_Phdr) > file_data.len) break;
 
-        const phdr: *const elf.Elf64_Phdr = @ptrCast(@alignCast(file_data.ptr + phdr_offset));
+        const phdr = std.mem.bytesAsValue(elf.Elf64_Phdr, file_data[phdr_offset..][0..@sizeOf(elf.Elf64_Phdr)]);
         if (phdr.p_type != elf.PT_LOAD) continue;
         if (phdr.p_memsz == 0) continue;
 
@@ -91,7 +91,7 @@ pub fn load(services: Services, file_data: []const u8) LoadError!LoadedKernel {
         const phdr_offset = phoff + @as(u64, i) * @as(u64, phentsize);
         if (phdr_offset + @sizeOf(elf.Elf64_Phdr) > file_data.len) break;
 
-        const phdr: *const elf.Elf64_Phdr = @ptrCast(@alignCast(file_data.ptr + phdr_offset));
+        const phdr = std.mem.bytesAsValue(elf.Elf64_Phdr, file_data[phdr_offset..][0..@sizeOf(elf.Elf64_Phdr)]);
         if (phdr.p_type != elf.PT_LOAD) continue;
         if (phdr.p_memsz == 0) continue;
 
