@@ -1,5 +1,5 @@
 
-pub const paging = @import("x86_64/paging.zig");
+pub const paging = @import("x86_64/paging_defs.zig");
 pub const layout = @import("x86_64/layout.zig");
 pub const types = @import("x86_64/types.zig");
 

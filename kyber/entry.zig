@@ -1,9 +1,10 @@
 const builtin = @import("builtin");
-const boot_info = @import("boot_info");
+pub const boot_info = @import("core/boot_info.zig");
+pub const types = @import("core/types.zig");
 const BootInfo = boot_info.BootInfo;
 const arch = @import("arch/x86_64/init.zig");
 const hal = @import("hal");
-const log = @import("log");
+const log = @import("core/log.zig");
 
 /// Initialization - called by both the real entry point and the
 /// simulator. All kernel setup goes here. The sim imports this module

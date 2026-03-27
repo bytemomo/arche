@@ -1,5 +1,5 @@
 const std = @import("std");
-const Backend = @import("writer");
+const Backend = @import("uefi/console.zig");
 
 pub fn init() !void {
     try Backend.init();

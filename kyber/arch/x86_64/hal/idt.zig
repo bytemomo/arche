@@ -89,9 +89,10 @@ pub fn install(
     dispatch_fn = dispatch;
     const table: *[256][2]u64 = @ptrCast(@alignCast(table_ptr));
     inline for (exceptions) |exc| {
-        const addr = makeStub(exc.vector, exc.has_error_code);
+        const vec: u8 = @intFromEnum(exc.vector);
+        const addr = makeStub(vec, exc.vector.hasErrorCode());
         const gate = encodeGate(addr, cs, exc.ist, @intFromEnum(exc.gate_type), 0);
-        table[exc.vector] = .{ gate.low, gate.high };
+        table[vec] = .{ gate.low, gate.high };
     }
     cpu.lidt(@intFromPtr(table_ptr), 256 * 16 - 1);
 }

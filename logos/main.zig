@@ -1,7 +1,7 @@
 const std = @import("std");
 const option = @import("option");
 
-const Log = @import("log");
+const Log = @import("log.zig");
 const services = @import("uefi/services.zig");
 const fs = @import("uefi/fs.zig");
 const elf_loader = @import("loader/elf.zig");

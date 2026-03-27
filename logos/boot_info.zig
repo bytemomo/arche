@@ -1,4 +1,4 @@
-const types = @import("types");
+const types = @import("types.zig");
 
 pub const Phys = types.Phys;
 pub const Virt = types.Virt;

@@ -3,9 +3,9 @@ const builtin = @import("builtin");
 const core = @import("core");
 const hal = @import("hal");
 const kernel = @import("kernel");
-const boot_info = @import("boot_info");
-const types = @import("types");
 
+const boot_info = kernel.boot_info;
+const types = kernel.types;
 const Phys = types.Phys;
 const Virt = types.Virt;
 const PageCount = types.PageCount;

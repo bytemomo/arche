@@ -1,5 +1,5 @@
 const std = @import("std");
-const arch = @import("arch");
+const arch = @import("../x86_64.zig");
 const Services = @import("../../uefi/services.zig").Services;
 
 const log = std.log.scoped(.logos__paging);

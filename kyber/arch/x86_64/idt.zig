@@ -1,7 +1,7 @@
 const std = @import("std");
 const hal = @import("hal");
 const gdt = @import("gdt.zig");
-const interrupts = @import("../../interrupts.zig");
+const interrupts = @import("../../core/interrupts.zig");
 
 // -- Gate Descriptor -------------------------------------------------
 
@@ -50,35 +50,80 @@ comptime {
 
 // -- Exception Definitions -------------------------------------------
 
+pub const Vector = enum(u8) {
+    divide_error = 0,
+    debug = 1,
+    nmi = 2,
+    breakpoint = 3,
+    overflow = 4,
+    bound_range = 5,
+    invalid_opcode = 6,
+    device_not_avail = 7,
+    double_fault = 8,
+    // 9: reserved (coprocessor segment overrun)
+    invalid_tss = 10,
+    segment_not_present = 11,
+    stack_segment = 12,
+    general_protection = 13,
+    page_fault = 14,
+    // 15: reserved
+    x87_fp = 16,
+    alignment_check = 17,
+    machine_check = 18,
+    simd_fp = 19,
+    virtualization = 20,
+    control_protection = 21,
+    // 22-27: reserved
+    // 28: hypervisor injection
+    // 29: vmm communication
+    security = 30,
+    // 31: reserved
+
+    pub fn hasErrorCode(self: Vector) bool {
+        return switch (self) {
+            .double_fault,
+            .invalid_tss,
+            .segment_not_present,
+            .stack_segment,
+            .general_protection,
+            .page_fault,
+            .alignment_check,
+            .control_protection,
+            .security,
+            => true,
+            else => false,
+        };
+    }
+};
+
 pub const Exception = struct {
-    vector: u8,
-    has_error_code: bool,
+    vector: Vector,
     gate_type: GateType = .interrupt,
     ist: u3 = 0,
 };
 
 pub const EXCEPTIONS = [_]Exception{
-    .{ .vector = 0, .has_error_code = false },
-    .{ .vector = 1, .has_error_code = false, .gate_type = .trap },
-    .{ .vector = 2, .has_error_code = false },
-    .{ .vector = 3, .has_error_code = false, .gate_type = .trap },
-    .{ .vector = 4, .has_error_code = false },
-    .{ .vector = 5, .has_error_code = false },
-    .{ .vector = 6, .has_error_code = false },
-    .{ .vector = 7, .has_error_code = false },
-    .{ .vector = 8, .has_error_code = true, .ist = 1 },
-    .{ .vector = 10, .has_error_code = true },
-    .{ .vector = 11, .has_error_code = true },
-    .{ .vector = 12, .has_error_code = true },
-    .{ .vector = 13, .has_error_code = true },
-    .{ .vector = 14, .has_error_code = true },
-    .{ .vector = 16, .has_error_code = false },
-    .{ .vector = 17, .has_error_code = true },
-    .{ .vector = 18, .has_error_code = false },
-    .{ .vector = 19, .has_error_code = false },
-    .{ .vector = 20, .has_error_code = false },
-    .{ .vector = 21, .has_error_code = true },
-    .{ .vector = 30, .has_error_code = true },
+    .{ .vector = .divide_error },
+    .{ .vector = .debug, .gate_type = .trap },
+    .{ .vector = .nmi },
+    .{ .vector = .breakpoint, .gate_type = .trap },
+    .{ .vector = .overflow },
+    .{ .vector = .bound_range },
+    .{ .vector = .invalid_opcode },
+    .{ .vector = .device_not_avail },
+    .{ .vector = .double_fault, .ist = 1 },
+    .{ .vector = .invalid_tss },
+    .{ .vector = .segment_not_present },
+    .{ .vector = .stack_segment },
+    .{ .vector = .general_protection },
+    .{ .vector = .page_fault },
+    .{ .vector = .x87_fp },
+    .{ .vector = .alignment_check },
+    .{ .vector = .machine_check },
+    .{ .vector = .simd_fp },
+    .{ .vector = .virtualization },
+    .{ .vector = .control_protection },
+    .{ .vector = .security },
 };
 
 comptime {
@@ -88,7 +133,7 @@ comptime {
         }
     }
     for (EXCEPTIONS) |exc| {
-        if (exc.vector == 8 and exc.ist == 0) {
+        if (exc.vector == .double_fault and exc.ist == 0) {
             @compileError("double fault must use IST");
         }
     }
@@ -96,7 +141,7 @@ comptime {
 
 // -- Table -----------------------------------------------------------
 
-const TABLE_LEN = 256;
+pub const TABLE_LEN = 256;
 var table: [TABLE_LEN]Gate align(16) = [_]Gate{Gate.nil} ** TABLE_LEN;
 
 // -- Init ------------------------------------------------------------

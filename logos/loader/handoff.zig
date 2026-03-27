@@ -1,12 +1,12 @@
 const std = @import("std");
 const uefi = std.os.uefi;
-const arch = @import("arch");
+const arch = @import("../arch/x86_64.zig");
 
 const Services = @import("../uefi/services.zig").Services;
 const srv = @import("../uefi/services.zig");
 const paging = @import("../arch/x86_64/paging.zig");
 const elf_loader = @import("elf.zig");
-const boot_info = @import("boot_info");
+const boot_info = @import("../boot_info.zig");
 
 const log = std.log.scoped(.logos__handoff);
 
