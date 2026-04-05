@@ -36,4 +36,8 @@ pub fn readCr3() u64 {
     return 0;
 }
 
+pub fn switchStackAndCall(_: u64, func: *const fn () noreturn) noreturn {
+    func();
+}
+
 pub fn writeCr3(_: u64) void {}

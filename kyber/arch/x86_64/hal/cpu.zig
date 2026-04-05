@@ -70,6 +70,22 @@ pub fn readCr3() u64 {
         : .{ .memory = true });
 }
 
+pub fn switchStackAndCall(
+    stack_top: u64,
+    func: *const fn () noreturn,
+) noreturn {
+    asm volatile (
+        \\mov %[sp], %%rsp
+        \\xor %%rbp, %%rbp
+        \\jmp *%[entry]
+        :
+        : [sp] "r" (stack_top),
+          [entry] "r" (func),
+        : .{ .memory = true }
+    );
+    unreachable;
+}
+
 pub fn writeCr3(addr: u64) void {
     asm volatile ("mov %[cr3], %%cr3"
         :

@@ -1,7 +1,7 @@
 const std = @import("std");
 const hal = @import("hal");
 const gdt = @import("gdt.zig");
-const interrupts = @import("../../core/interrupts.zig");
+const interrupts = @import("core").interrupts;
 
 
 pub const GateType = enum(u4) {

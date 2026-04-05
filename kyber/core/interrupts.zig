@@ -1,6 +1,4 @@
-const arch = @import("../arch/x86_64/init.zig");
-
-pub const MAX_VECTORS = arch.MAX_VECTORS;
+pub const MAX_VECTORS = 256;
 pub const Handler = *const fn (vector: u8, error_code: u64) void;
 
 var handlers: [MAX_VECTORS]Handler = [_]Handler{unhandled} ** MAX_VECTORS;

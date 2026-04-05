@@ -38,7 +38,7 @@ var info = boot_info.BootInfo{
 export fn sim_init(seed: u64) void {
     sim = core.Simulation.init(seed);
     hal.port_io.init(&sim);
-    kernel.init(&info);
+    kernel.arch.init(&info);
 }
 
 export fn sim_step() u64 {

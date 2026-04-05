@@ -1,6 +1,7 @@
 const std = @import("std");
-const boot_info = @import("../core/boot_info.zig");
-const types = @import("../core/types.zig");
+const core = @import("core");
+const boot_info = core.boot_info;
+const types = core.types;
 
 const Phys = types.Phys;
 const Size = types.Size;

@@ -46,7 +46,7 @@
 //!   PD:       512 × 2MB   = 1GB
 //!   PT:       512 × 4KB   = 2MB
 
-const common_types = @import("../../../core/types.zig");
+const common_types = @import("core").types;
 const arch_types = @import("types.zig");
 
 pub const Size = common_types.Size;

@@ -1,4 +1,4 @@
-const common_types = @import("../../../core/types.zig");
+const common_types = @import("core").types;
 
 pub const Phys = common_types.Phys;
 pub const Size = common_types.Size;

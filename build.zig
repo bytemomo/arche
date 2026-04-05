@@ -15,12 +15,11 @@ pub fn build(b: *std.Build) void {
 
     setupKyber(b, cpu_arch, options, optimize);
     setupLogos(b, cpu_arch, options, optimize);
-    setupTests(b);
+    setupTests(b, cpu_arch);
     setupSimHeadless(b, cpu_arch, options, optimize);
     setupSimWeb(b, cpu_arch, options, optimize);
     setupQemu(b);
 }
-
 
 fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     const s = b.option([]const u8, "log_level", "log_level") orelse "Info";
@@ -39,7 +38,6 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     options.addOption(std.log.Level, "log_level", level);
 }
 
-
 fn halPath(arch: std.Target.Cpu.Arch) []const u8 {
     return switch (arch) {
         .x86_64 => "kyber/arch/x86_64/hal/hal.zig",
@@ -47,6 +45,44 @@ fn halPath(arch: std.Target.Cpu.Arch) []const u8 {
     };
 }
 
+fn archPath(arch: std.Target.Cpu.Arch) []const u8 {
+    return switch (arch) {
+        .x86_64 => "kyber/arch/x86_64/init.zig",
+        else => @panic("Unsupported architecture"),
+    };
+}
+
+const KernelModules = struct {
+    hal: *std.Build.Module,
+    core: *std.Build.Module,
+    mem: *std.Build.Module,
+    arch: *std.Build.Module,
+};
+
+fn createKernelModules(
+    b: *std.Build,
+    cpu_arch: std.Target.Cpu.Arch,
+    hal: *std.Build.Module,
+) KernelModules {
+    const core = b.createModule(.{
+        .root_source_file = b.path("kyber/core/core.zig"),
+    });
+    core.addImport("hal", hal);
+
+    const mem = b.createModule(.{
+        .root_source_file = b.path("kyber/mem/mem.zig"),
+    });
+    mem.addImport("core", core);
+
+    const arch = b.createModule(.{
+        .root_source_file = b.path(archPath(cpu_arch)),
+    });
+    arch.addImport("hal", hal);
+    arch.addImport("core", core);
+    arch.addImport("mem", mem);
+
+    return .{ .hal = hal, .core = core, .mem = mem, .arch = arch };
+}
 
 fn setupKyber(
     b: *std.Build,
@@ -54,7 +90,10 @@ fn setupKyber(
     options: *std.Build.Step.Options,
     optimize: std.builtin.OptimizeMode,
 ) void {
-    const hal = b.createModule(.{ .root_source_file = b.path(halPath(cpu_arch)) });
+    const hal = b.createModule(.{
+        .root_source_file = b.path(halPath(cpu_arch)),
+    });
+    const mods = createKernelModules(b, cpu_arch, hal);
 
     const kyber = b.addExecutable(.{
         .name = "kyber.elf",
@@ -73,7 +112,11 @@ fn setupKyber(
         .use_llvm = true,
     });
     kyber.root_module.addOptions("option", options);
-    kyber.root_module.addImport("hal", hal);
+    kyber.root_module.addImport("hal", mods.hal);
+    kyber.root_module.addImport("core", mods.core);
+    // arch needs kernel for kmain; wire after root module exists.
+    mods.arch.addImport("kernel", kyber.root_module);
+    kyber.root_module.addImport("arch", mods.arch);
     kyber.setLinkerScript(b.path("kyber/linker.ld"));
     b.installArtifact(kyber);
 
@@ -85,7 +128,6 @@ fn setupKyber(
     b.getInstallStep().dependOn(&install.step);
 }
 
-
 fn setupLogos(
     b: *std.Build,
     cpu_arch: std.Target.Cpu.Arch,
@@ -96,7 +138,10 @@ fn setupLogos(
         .name = "BOOTX64.EFI",
         .root_module = b.createModule(.{
             .root_source_file = b.path("logos/main.zig"),
-            .target = b.resolveTargetQuery(.{ .cpu_arch = cpu_arch, .os_tag = .uefi }),
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = cpu_arch,
+                .os_tag = .uefi,
+            }),
             .optimize = optimize,
         }),
         .linkage = .static,
@@ -114,7 +159,6 @@ fn setupLogos(
     b.getInstallStep().dependOn(&install.step);
 }
 
-
 fn setupSim(
     b: *std.Build,
     cpu_arch: std.Target.Cpu.Arch,
@@ -122,15 +166,24 @@ fn setupSim(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) *std.Build.Step.Compile {
-    const sim_hal = b.createModule(.{ .root_source_file = b.path("sim/hal/hal.zig") });
-    sim_hal.addImport("core", b.createModule(.{
+    const sim_hal = b.createModule(.{
+        .root_source_file = b.path("sim/hal/hal.zig"),
+    });
+    const sim_core = b.createModule(.{
         .root_source_file = b.path("sim/core.zig"),
-    }));
+    });
+    sim_hal.addImport("core", sim_core);
 
-    // The kernel module uses the sim HAL — same code, different hardware.
-    const kernel = b.createModule(.{ .root_source_file = b.path("kyber/entry.zig") });
+    const mods = createKernelModules(b, cpu_arch, sim_hal);
+
+    const kernel = b.createModule(.{
+        .root_source_file = b.path("kyber/entry.zig"),
+    });
     kernel.addImport("hal", sim_hal);
+    kernel.addImport("core", mods.core);
+    kernel.addImport("arch", mods.arch);
     kernel.addOptions("option", options);
+    mods.arch.addImport("kernel", kernel);
 
     const sim = b.addExecutable(.{
         .name = "arche-sim",
@@ -141,10 +194,9 @@ fn setupSim(
         }),
     });
     sim.root_module.addImport("hal", sim_hal);
-    sim.root_module.addImport("core", sim_hal.import_table.get("core").?);
+    sim.root_module.addImport("core", sim_core);
     sim.root_module.addImport("kernel", kernel);
 
-    _ = cpu_arch;
     return sim;
 }
 
@@ -169,51 +221,88 @@ fn setupSimWeb(
     options: *std.Build.Step.Options,
     optimize: std.builtin.OptimizeMode,
 ) void {
-    const target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding });
+    const target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .freestanding,
+    });
     const sim = setupSim(b, cpu_arch, options, target, optimize);
     sim.entry = .disabled;
     sim.rdynamic = true;
     sim.stack_size = 4 * 1024 * 1024;
 
     const web_dir = "sim/web";
-    const install_wasm = b.addInstallFile(sim.getEmittedBin(), b.fmt("{s}/arche-sim.wasm", .{web_dir}));
+    const install_wasm = b.addInstallFile(
+        sim.getEmittedBin(),
+        b.fmt("{s}/arche-sim.wasm", .{web_dir}),
+    );
     install_wasm.step.dependOn(&sim.step);
-    const install_html = b.addInstallFile(b.path("sim/web/index.html"), b.fmt("{s}/index.html", .{web_dir}));
-    const install_js = b.addInstallFile(b.path("sim/web/index.js"), b.fmt("{s}/index.js", .{web_dir}));
+    const install_html = b.addInstallFile(
+        b.path("sim/web/index.html"),
+        b.fmt("{s}/index.html", .{web_dir}),
+    );
+    const install_js = b.addInstallFile(
+        b.path("sim/web/index.js"),
+        b.fmt("{s}/index.js", .{web_dir}),
+    );
 
     const serve = b.addSystemCommand(&.{
-        "python3",                                      "-m", "http.server", "8080", "--directory",
+        "python3",
+        "-m",
+        "http.server",
+        "8080",
+        "--directory",
         b.fmt("{s}/{s}", .{ b.install_path, web_dir }),
     });
     serve.step.dependOn(&install_wasm.step);
     serve.step.dependOn(&install_html.step);
     serve.step.dependOn(&install_js.step);
-    b.step("sim-web", "Build and serve DST simulation (wasm32)").dependOn(&serve.step);
+    b.step("sim-web", "Build and serve DST simulation (wasm32)")
+        .dependOn(&serve.step);
 }
 
-
-fn setupTests(b: *std.Build) void {
+fn setupTests(b: *std.Build, cpu_arch: std.Target.Cpu.Arch) void {
     const test_step = b.step("test", "Run unit tests");
 
-    // Kernel tests — use entry.zig as root so file imports resolve.
-    const hal = b.createModule(.{ .root_source_file = b.path("sim/hal/hal.zig") });
-    const core = b.createModule(.{ .root_source_file = b.path("sim/core.zig") });
-    hal.addImport("core", core);
-    const kernel_test = b.createModule(.{
-        .root_source_file = b.path("kyber/tests.zig"),
+    const sim_hal = b.createModule(.{
+        .root_source_file = b.path("sim/hal/hal.zig"),
+    });
+    const sim_core = b.createModule(.{
+        .root_source_file = b.path("sim/core.zig"),
+    });
+    sim_hal.addImport("core", sim_core);
+
+    const mods = createKernelModules(b, cpu_arch, sim_hal);
+
+    // Core module tests
+    const core_test = b.createModule(.{
+        .root_source_file = b.path("kyber/core/core.zig"),
         .target = b.graph.host,
     });
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = kernel_test })).step);
+    core_test.addImport("hal", sim_hal);
+    test_step.dependOn(
+        &b.addRunArtifact(b.addTest(.{ .root_module = core_test })).step,
+    );
+
+    // Arch mm tests
+    const arch_mm_test = b.createModule(.{
+        .root_source_file = b.path("kyber/arch/x86_64/mm/tests.zig"),
+        .target = b.graph.host,
+    });
+    arch_mm_test.addImport("core", mods.core);
+    test_step.dependOn(
+        &b.addRunArtifact(b.addTest(.{ .root_module = arch_mm_test })).step,
+    );
 
     // Sim HAL tests
     const hal_test = b.createModule(.{
         .root_source_file = b.path("sim/hal/hal.zig"),
         .target = b.graph.host,
     });
-    hal_test.addImport("core", core);
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = hal_test })).step);
+    hal_test.addImport("core", sim_core);
+    test_step.dependOn(
+        &b.addRunArtifact(b.addTest(.{ .root_module = hal_test })).step,
+    );
 }
-
 
 fn setupQemu(b: *std.Build) void {
     const qemu = b.addSystemCommand(&.{
@@ -223,7 +312,10 @@ fn setupQemu(b: *std.Build) void {
         "-bios",
         "/usr/share/edk2/x64/OVMF.4m.fd",
         "-drive",
-        b.fmt("file=fat:rw:{s}/{s},format=raw", .{ b.install_path, out_dir_name }),
+        b.fmt("file=fat:rw:{s}/{s},format=raw", .{
+            b.install_path,
+            out_dir_name,
+        }),
         "-nographic",
         "-serial",
         "mon:stdio",

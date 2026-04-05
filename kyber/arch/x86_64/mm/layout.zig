@@ -28,7 +28,7 @@
 //! │ 0x0000_0000_0000_0000   └──────────────────┘                     │
 //! └──────────────────────────────────────────────────────────────────┘
 
-const common_types = @import("../../../core/types.zig");
+const common_types = @import("core").types;
 const arch_types = @import("types.zig");
 
 const Phys = common_types.Phys;
