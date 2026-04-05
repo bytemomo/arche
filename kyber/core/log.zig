@@ -13,6 +13,15 @@ pub fn init() !void {
     port_io.outb(COM1 + 4, 0x0B);
 }
 
+pub fn fatal(
+    comptime src: std.builtin.SourceLocation,
+    comptime msg: []const u8,
+) noreturn {
+    @branchHint(.cold);
+    doLog("[FTL] ", src, msg, .{});
+    @panic(msg);
+}
+
 pub fn err(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
     doLog("[ERR] ", src, fmt, args);
 }
@@ -29,7 +38,11 @@ pub fn debug(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8,
     doLog("[DBG] ", src, fmt, args);
 }
 
-fn doLog(
+pub fn trace(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    doLog("[TRC] ", src, fmt, args);
+}
+
+pub fn doLog(
     comptime level_str: []const u8,
     comptime src: std.builtin.SourceLocation,
     comptime fmt: []const u8,
@@ -48,7 +61,29 @@ fn doLog(
     ) catch {};
 }
 
-fn uintToStr(comptime n: u32) []const u8 {
+/// Write raw bytes to serial. Used by the panic handler for
+/// runtime (non-comptime) messages.
+pub fn writeSerial(bytes: []const u8) void {
+    for (bytes) |b| {
+        while ((port_io.inb(COM1 + 5) & 0x20) == 0) {}
+        port_io.outb(COM1, b);
+    }
+}
+
+/// Write a usize as hex to serial.
+pub fn writeSerialHex(addr: usize) void {
+    writeSerial("0x");
+    const hex = "0123456789abcdef";
+    var i: u6 = 60;
+    while (true) {
+        const nibble: u4 = @truncate(addr >> i);
+        writeSerial(&[1]u8{hex[nibble]});
+        if (i == 0) break;
+        i -= 4;
+    }
+}
+
+pub fn uintToStr(comptime n: u32) []const u8 {
     comptime {
         if (n == 0) return "0";
         var buf: [10]u8 = undefined;
@@ -67,7 +102,7 @@ fn uintToStr(comptime n: u32) []const u8 {
     }
 }
 
-fn fileFromPath(comptime path: [:0]const u8) []const u8 {
+pub fn fileFromPath(comptime path: [:0]const u8) []const u8 {
     comptime {
         var i = path.len;
         while (i > 0) {
@@ -78,7 +113,7 @@ fn fileFromPath(comptime path: [:0]const u8) []const u8 {
     }
 }
 
-fn scopeFromPath(comptime path: [:0]const u8) []const u8 {
+pub fn scopeFromPath(comptime path: [:0]const u8) []const u8 {
     comptime {
         const stripped = if (endsWith(path, ".zig"))
             path[0 .. path.len - 4]
@@ -95,7 +130,12 @@ fn scopeFromPath(comptime path: [:0]const u8) []const u8 {
         else
             cleaned;
 
-        return replaceSlashes(no_init);
+        const scoped = if (no_init.len == 0)
+            "kyber"
+        else
+            "kyber/" ++ no_init;
+
+        return replaceSlashes(scoped);
     }
 }
 
@@ -172,24 +212,17 @@ const SerialWriter = struct {
         var total_len: usize = 0;
 
         for (data[0 .. data.len - 1]) |slice| {
-            writeBytes(slice);
+            writeSerial(slice);
             total_len += slice.len;
         }
 
         const last = data[data.len - 1];
         for (0..splat) |_| {
-            writeBytes(last);
+            writeSerial(last);
             total_len += last.len;
         }
 
         return total_len;
-    }
-
-    fn writeBytes(bytes: []const u8) void {
-        for (bytes) |b| {
-            while ((port_io.inb(COM1 + 5) & 0x20) == 0) {}
-            port_io.outb(COM1, b);
-        }
     }
 };
 

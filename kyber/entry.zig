@@ -6,6 +6,8 @@ const arch = @import("arch/x86_64/init.zig");
 const hal = @import("hal");
 const log = @import("core/log.zig");
 
+pub const panic = @import("core/panic.zig");
+
 /// Initialization - called by both the real entry point and the
 /// simulator. All kernel setup goes here. The sim imports this module
 /// and calls init() directly, running the same code through the sim HAL.
