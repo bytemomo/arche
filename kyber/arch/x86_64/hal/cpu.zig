@@ -62,3 +62,17 @@ pub fn loadDs(comptime sel: u16) void {
         : [ds] "i" (sel),
         : .{ .rax = true });
 }
+
+pub fn readCr3() u64 {
+    return asm volatile ("mov %%cr3, %[ret]"
+        : [ret] "=r" (-> u64),
+        :
+        : .{ .memory = true });
+}
+
+pub fn writeCr3(addr: u64) void {
+    asm volatile ("mov %[cr3], %%cr3"
+        :
+        : [cr3] "r" (addr),
+        : .{ .memory = true });
+}

@@ -3,7 +3,6 @@ const hal = @import("hal");
 const gdt = @import("gdt.zig");
 const interrupts = @import("../../core/interrupts.zig");
 
-// -- Gate Descriptor -------------------------------------------------
 
 pub const GateType = enum(u4) {
     interrupt = 0xE,
@@ -48,7 +47,6 @@ comptime {
     std.debug.assert(@sizeOf(Gate) == 16);
 }
 
-// -- Exception Definitions -------------------------------------------
 
 pub const Vector = enum(u8) {
     divide_error = 0,
@@ -139,12 +137,10 @@ comptime {
     }
 }
 
-// -- Table -----------------------------------------------------------
 
 pub const TABLE_LEN = 256;
 var table: [TABLE_LEN]Gate align(16) = [_]Gate{Gate.nil} ** TABLE_LEN;
 
-// -- Init ------------------------------------------------------------
 
 pub fn init() void {
     const cs: u16 = @bitCast(gdt.KERNEL_CS);
@@ -157,7 +153,6 @@ pub fn init() void {
     );
 }
 
-// -- Inject (for sim) ------------------------------------------------
 
 pub fn inject(vector: u8, error_code: u64) void {
     hal.idt.inject(vector, error_code, &interrupts.dispatch);

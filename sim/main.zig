@@ -34,7 +34,6 @@ var info = boot_info.BootInfo{
     .rsdp_phys = Phys.from(0),
 };
 
-// --- Tick-based API -------------------------------------------------
 
 export fn sim_init(seed: u64) void {
     sim = core.Simulation.init(seed);
@@ -64,7 +63,6 @@ export fn sim_reset() void {
     hal.port_io.init(&sim);
 }
 
-// --- Host-native main -----------------------------------------------
 
 pub fn main() !void {
     if (is_wasm) return;

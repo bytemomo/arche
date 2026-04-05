@@ -21,7 +21,6 @@ pub fn build(b: *std.Build) void {
     setupQemu(b);
 }
 
-// -- Options ---------------------------------------------------------
 
 fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     const s = b.option([]const u8, "log_level", "log_level") orelse "Info";
@@ -40,7 +39,6 @@ fn setup(b: *std.Build, options: *std.Build.Step.Options) void {
     options.addOption(std.log.Level, "log_level", level);
 }
 
-// -- Architecture paths ----------------------------------------------
 
 fn halPath(arch: std.Target.Cpu.Arch) []const u8 {
     return switch (arch) {
@@ -49,7 +47,6 @@ fn halPath(arch: std.Target.Cpu.Arch) []const u8 {
     };
 }
 
-// -- Kyber (hypervisor kernel) ---------------------------------------
 
 fn setupKyber(
     b: *std.Build,
@@ -88,7 +85,6 @@ fn setupKyber(
     b.getInstallStep().dependOn(&install.step);
 }
 
-// -- Logos (UEFI bootloader) -----------------------------------------
 
 fn setupLogos(
     b: *std.Build,
@@ -118,7 +114,6 @@ fn setupLogos(
     b.getInstallStep().dependOn(&install.step);
 }
 
-// -- Simulation (DST) ------------------------------------------------
 
 fn setupSim(
     b: *std.Build,
@@ -196,7 +191,6 @@ fn setupSimWeb(
     b.step("sim-web", "Build and serve DST simulation (wasm32)").dependOn(&serve.step);
 }
 
-// -- Tests -----------------------------------------------------------
 
 fn setupTests(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
@@ -220,7 +214,6 @@ fn setupTests(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = hal_test })).step);
 }
 
-// -- QEMU runner -----------------------------------------------------
 
 fn setupQemu(b: *std.Build) void {
     const qemu = b.addSystemCommand(&.{

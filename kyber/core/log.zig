@@ -13,46 +13,146 @@ pub fn init() !void {
     port_io.outb(COM1 + 4, 0x0B);
 }
 
-pub fn logFn(
-    comptime level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
-    comptime format: []const u8,
-    args: anytype,
-) void {
-    const level_str = comptime switch (level) {
-        .debug => "[DBG]",
-        .info => "[INF]",
-        .warn => "[WRN]",
-        .err => "[ERR]",
-    };
-    const scope_str = if (scope == .default)
-        ": "
-    else
-        "(" ++ comptime formatScope(@tagName(scope)) ++ "): ";
-
-    var w = serialWriter() catch return;
-    std.Io.Writer.print(&w.interface, level_str ++ " " ++ scope_str ++ format ++ "\n", args) catch {};
+pub fn err(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    doLog("[ERR] ", src, fmt, args);
 }
 
-fn formatScope(comptime name: []const u8) []const u8 {
+pub fn warn(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    doLog("[WRN] ", src, fmt, args);
+}
+
+pub fn info(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    doLog("[INF] ", src, fmt, args);
+}
+
+pub fn debug(comptime src: std.builtin.SourceLocation, comptime fmt: []const u8, args: anytype) void {
+    doLog("[DBG] ", src, fmt, args);
+}
+
+fn doLog(
+    comptime level_str: []const u8,
+    comptime src: std.builtin.SourceLocation,
+    comptime fmt: []const u8,
+    args: anytype,
+) void {
+    const scope = comptime scopeFromPath(src.file);
+    const file = comptime fileFromPath(src.file);
+    const line = comptime uintToStr(src.line);
+
+    var w = serialWriter() catch return;
+    std.Io.Writer.print(
+        &w.interface,
+        level_str ++ scope ++ " " ++
+            file ++ ":" ++ line ++ " " ++ fmt ++ "\n",
+        args,
+    ) catch {};
+}
+
+fn uintToStr(comptime n: u32) []const u8 {
     comptime {
-        var result: [name.len]u8 = undefined;
-        var i: usize = 0;
-        while (i < name.len) {
-            if (i + 1 < name.len and name[i] == '_' and name[i + 1] == '_') {
-                result[i] = '/';
-                i += 1;
-                var j: usize = i;
-                while (j + 1 < name.len) {
-                    result[j] = name[j + 1];
-                    j += 1;
-                }
-                return result[0 .. name.len - 1];
-            }
-            result[i] = name[i];
-            i += 1;
+        if (n == 0) return "0";
+        var buf: [10]u8 = undefined;
+        var len: usize = 0;
+        var v = n;
+        while (v > 0) {
+            buf[len] = '0' + @as(u8, @intCast(v % 10));
+            len += 1;
+            v /= 10;
         }
-        return result[0..name.len];
+        var result: [len]u8 = undefined;
+        for (0..len) |i| {
+            result[i] = buf[len - 1 - i];
+        }
+        return &result;
+    }
+}
+
+fn fileFromPath(comptime path: [:0]const u8) []const u8 {
+    comptime {
+        var i = path.len;
+        while (i > 0) {
+            i -= 1;
+            if (path[i] == '/') return path[i + 1 ..];
+        }
+        return path;
+    }
+}
+
+fn scopeFromPath(comptime path: [:0]const u8) []const u8 {
+    comptime {
+        const stripped = if (endsWith(path, ".zig"))
+            path[0 .. path.len - 4]
+        else
+            path[0..path.len];
+
+        const cleaned = removeSegment(
+            removeSegment(stripped, "arch/x86_64/"),
+            "core/",
+        );
+
+        const no_init = if (endsWith(cleaned, "/init"))
+            cleaned[0 .. cleaned.len - 5]
+        else
+            cleaned;
+
+        return replaceSlashes(no_init);
+    }
+}
+
+fn endsWith(comptime s: []const u8, comptime suffix: []const u8) bool {
+    if (s.len < suffix.len) return false;
+    return eql(s[s.len - suffix.len ..], suffix);
+}
+
+fn eql(comptime a: []const u8, comptime b: []const u8) bool {
+    if (a.len != b.len) return false;
+    for (a, b) |ca, cb| {
+        if (ca != cb) return false;
+    }
+    return true;
+}
+
+fn removeSegment(
+    comptime s: []const u8,
+    comptime seg: []const u8,
+) []const u8 {
+    comptime {
+        if (s.len < seg.len) return s;
+        for (0..s.len - seg.len + 1) |i| {
+            if (eql(s[i .. i + seg.len], seg)) {
+                var result: [s.len - seg.len]u8 = undefined;
+                for (0..i) |j| result[j] = s[j];
+                for (i..s.len - seg.len) |j| {
+                    result[j] = s[j + seg.len];
+                }
+                return &result;
+            }
+        }
+        return s;
+    }
+}
+
+fn replaceSlashes(comptime s: []const u8) []const u8 {
+    comptime {
+        var slash_count: usize = 0;
+        for (s) |c| {
+            if (c == '/') slash_count += 1;
+        }
+        const new_len = s.len + slash_count;
+        var result: [new_len]u8 = undefined;
+        var j: usize = 0;
+        for (s) |c| {
+            if (c == '/') {
+                result[j] = ':';
+                j += 1;
+                result[j] = ':';
+                j += 1;
+            } else {
+                result[j] = c;
+                j += 1;
+            }
+        }
+        return &result;
     }
 }
 
@@ -63,7 +163,11 @@ const SerialWriter = struct {
         .drain = drain,
     };
 
-    fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
+    fn drain(
+        io_w: *std.Io.Writer,
+        data: []const []const u8,
+        splat: usize,
+    ) !usize {
         _ = io_w;
         var total_len: usize = 0;
 

@@ -7,7 +7,6 @@ pub const Selector = packed struct(u16) {
     index: u13,
 };
 
-// -- Segment Descriptors ---------------------------------------------
 
 const Access = packed struct(u8) {
     accessed: bool = false,
@@ -78,7 +77,6 @@ comptime {
     std.debug.assert(@sizeOf(Entry) == 8);
 }
 
-// -- TSS -------------------------------------------------------------
 
 const Tss = packed struct(u832) {
     _reserved0: u32 = 0,
@@ -128,7 +126,6 @@ comptime {
     std.debug.assert(@sizeOf(TssEntry) == 16);
 }
 
-// -- GDT Layout ------------------------------------------------------
 
 const Slot = enum {
     nil,
@@ -213,12 +210,10 @@ comptime {
     }
 }
 
-// -- Runtime State ---------------------------------------------------
 
 var tss: Tss = .{};
 var table align(16) = buildTable();
 
-// -- Load Helpers ----------------------------------------------------
 
 fn loadTss() void {
     const tss_idx = comptime slotIndex(.tss);
@@ -231,7 +226,6 @@ fn loadTss() void {
     cpu.ltr(@bitCast(TSS_SEL));
 }
 
-// -- Init ------------------------------------------------------------
 
 pub fn init() void {
     cpu.lgdt(@intFromPtr(&table), @sizeOf(@TypeOf(table)) - 1);

@@ -10,12 +10,11 @@ const log = @import("core/log.zig");
 /// simulator. All kernel setup goes here. The sim imports this module
 /// and calls init() directly, running the same code through the sim HAL.
 pub fn init(info: *BootInfo) void {
-    _ = info;
     log.init() catch {};
-    log.logFn(.info, .kyber, "kernel started", .{});
+    log.info(@src(), "kernel started", .{});
 
-    arch.init();
-    log.logFn(.info, .kyber, "arch initialized", .{});
+    arch.init(info);
+    log.info(@src(), "arch initialized", .{});
 }
 
 /// Real entry point - calls init then halts. Never returns.

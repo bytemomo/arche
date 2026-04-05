@@ -31,3 +31,9 @@ pub fn loadDs(comptime sel: u16) void {
 pub fn halt() noreturn {
     while (true) {}
 }
+
+pub fn readCr3() u64 {
+    return 0;
+}
+
+pub fn writeCr3(_: u64) void {}
