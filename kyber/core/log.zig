@@ -70,6 +70,53 @@ pub fn writeSerial(bytes: []const u8) void {
     }
 }
 
+/// Write a usize as decimal to serial.
+/// Avoids software division (not available in freestanding)
+/// by using repeated subtraction with power-of-10 table.
+pub fn writeSerialDec(value: usize) void {
+    if (value == 0) {
+        writeSerial("0");
+        return;
+    }
+
+    const powers = [_]usize{
+        10_000_000_000_000_000_000,
+        1_000_000_000_000_000_000,
+        100_000_000_000_000_000,
+        10_000_000_000_000_000,
+        1_000_000_000_000_000,
+        100_000_000_000_000,
+        10_000_000_000_000,
+        1_000_000_000_000,
+        100_000_000_000,
+        10_000_000_000,
+        1_000_000_000,
+        100_000_000,
+        10_000_000,
+        1_000_000,
+        100_000,
+        10_000,
+        1_000,
+        100,
+        10,
+        1,
+    };
+
+    var started = false;
+    var v = value;
+    for (powers) |p| {
+        var digit: u8 = 0;
+        while (v >= p) {
+            v -= p;
+            digit += 1;
+        }
+        if (digit > 0 or started) {
+            started = true;
+            writeSerial(&[1]u8{'0' + digit});
+        }
+    }
+}
+
 /// Write a usize as hex to serial.
 pub fn writeSerialHex(addr: usize) void {
     writeSerial("0x");

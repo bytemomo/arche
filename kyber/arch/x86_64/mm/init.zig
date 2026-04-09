@@ -49,7 +49,7 @@ fn mapKernelStack(pml4: *PML4) void {
     while (offset < size) : (offset += paging.PAGE_SIZE) {
         const virt = Virt.from(base.raw() + offset);
         const phys = page_alloc.allocPages(1) orelse
-            @panic("mm/init: out of memory for kernel stack");
+            @panic("out of memory for kernel stack");
         mapPage(pml4, virt, phys);
     }
 
@@ -148,7 +148,7 @@ fn cloneEntries(new: *PML4, old_cr3: Phys) void {
 
 fn allocTable(comptime T: type) *T {
     const phys = page_alloc.allocPages(1) orelse
-        @panic("mm/init: out of memory for page table");
+        @panic("out of memory for page table");
     const addr = phys.raw();
     const ptr: [*]volatile u8 = @ptrFromInt(addr);
     for (0..4096) |i| {
