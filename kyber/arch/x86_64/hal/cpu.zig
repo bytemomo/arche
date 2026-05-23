@@ -70,6 +70,14 @@ pub fn readCr3() u64 {
         : .{ .memory = true });
 }
 
+pub fn readCr2() u64 {
+    return asm volatile("mov %%cr2, %[ret]"
+        : [ret] "=r" (-> u64),
+        :
+        : .{ .memory = true }
+    );
+}
+
 pub fn switchStackAndCall(
     stack_top: u64,
     func: *const fn () noreturn,

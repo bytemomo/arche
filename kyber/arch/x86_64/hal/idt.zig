@@ -28,6 +28,7 @@ export fn isrCommon() callconv(.naked) void {
         \\pushq %%r13
         \\pushq %%r14
         \\pushq %%r15
+        \\movq %%rsp, %%rdi
         \\movabsq %[handler], %%rax
         \\callq *%%rax
         \\popq %%r15
@@ -52,12 +53,51 @@ export fn isrCommon() callconv(.naked) void {
     );
 }
 
+var last_fault_rip: u64 = 0;
+var last_fault_cs: u64 = 0;
+var last_fault_rflags: u64 = 0;
+
+pub fn lastRip() u64 { return last_fault_rip; }
+pub fn lastCs() u64 { return last_fault_cs; }
+pub fn lastRflags() u64 { return last_fault_rflags; }
+
+/// Index into the interrupt frame
+const Slot = enum(usize) {
+    r15 = 0,
+    r14 = 1,
+    r13 = 2,
+    r12 = 3,
+    r11 = 4,
+    r10 = 5,
+    r9 = 6,
+    r8 = 7,
+    rbp = 8,
+    rdi = 9,
+    rsi = 10,
+    rdx = 11,
+    rcx = 12,
+    rbx = 13,
+    rax = 14,
+    vector = 15,
+    error_code = 16,
+    rip = 17,
+    cs = 18,
+    rflags = 19,
+    rsp = 20,
+    ss = 21,
+};
+
 fn trampoline(frame: *anyopaque) callconv(.c) void {
     if (dispatch_fn) |f| {
         const stack: [*]const u64 = @ptrCast(@alignCast(frame));
-        const vector: u8 = @truncate(stack[15]);
-        const error_code: u64 = stack[16];
-        f(vector, error_code);
+
+        last_fault_rip = stack[@intFromEnum(Slot.rip)];
+        last_fault_cs = stack[@intFromEnum(Slot.cs)];
+        last_fault_rflags = stack[@intFromEnum(Slot.rflags)];
+        f(
+            @truncate(stack[@intFromEnum(Slot.vector)]),
+            stack[@intFromEnum(Slot.error_code)],
+        );
     }
 }
 

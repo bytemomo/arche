@@ -25,7 +25,15 @@ pub fn init(info: *boot_info.BootInfo) void {
     log.info(@src(), "arch initialized", .{});
 }
 
-pub fn start(info: *boot_info.BootInfo) callconv(.c) noreturn {
+pub fn start() callconv(.naked) noreturn {
+    asm volatile (
+        \\andq $-16, %%rsp
+        \\subq $8, %%rsp
+        \\jmp startAligned
+    );
+}
+
+export fn startAligned(info: *boot_info.BootInfo) callconv(.c) noreturn {
     init(info);
 
     const stack_top = layout.KERNEL_STACK_BASE.raw() +

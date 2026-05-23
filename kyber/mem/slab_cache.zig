@@ -27,11 +27,7 @@ pub fn SlabCache(comptime T: type) type {
 
         const obj_align = @max(@alignOf(T), @alignOf(FreeSlot));
         const obj_size = @max(
-            std.mem.alignForward(
-                usize,
-                @max(@sizeOf(T), 1),
-                obj_align,
-            ),
+            std.mem.alignForward( usize, @max(@sizeOf(T), 1), obj_align),
             @sizeOf(FreeSlot),
         );
 
@@ -52,11 +48,7 @@ pub fn SlabCache(comptime T: type) type {
             base: [*]u8,
         };
 
-        const meta_size = std.mem.alignForward(
-            usize,
-            @sizeOf(Slab),
-            obj_align,
-        );
+        const meta_size = std.mem.alignForward(usize, @sizeOf(Slab), obj_align);
 
         /// Number of objects that fit in one slab page.
         pub const slots_per_slab: u16 = @intCast(
@@ -74,8 +66,7 @@ pub fn SlabCache(comptime T: type) type {
 
         /// Allocate one T from the cache.
         pub fn alloc(self: *Self) ?*T {
-            const slab = self.findFreeSlab() orelse
-                self.growSlab() orelse return null;
+            const slab = self.findFreeSlab() orelse self.growSlab() orelse return null;
 
             const slot_idx = slab.free_head;
             const ptr = slotPtr(slab, slot_idx);

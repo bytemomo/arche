@@ -1,9 +1,13 @@
 const hal = @import("hal");
 const core = @import("core");
+
 const log = core.log;
 const boot_info = core.boot_info;
+
 const paging = @import("paging.zig");
 const layout = @import("layout.zig");
+const fault = @import("fault.zig");
+
 const PageAllocator = @import("mem").PageAllocator;
 
 const Phys = boot_info.Phys;
@@ -20,11 +24,14 @@ const PT = paging.PT;
 const PTE = paging.PTE;
 
 /// Global — bitmap is 128 KiB, too large for the stack.
-var page_alloc: PageAllocator = undefined;
+var page_alloc: PageAllocator align(16) = undefined;
 
 pub fn init(info: *boot_info.BootInfo) void {
     page_alloc.initInPlace(info.memory_map);
     log.debug(@src(), "page allocator ready", .{});
+
+    fault.init();
+    log.debug(@src(), "page fault handler installed", .{});
 
     const pml4 = allocTable(PML4);
     mapDirectPhysRegion(pml4);
